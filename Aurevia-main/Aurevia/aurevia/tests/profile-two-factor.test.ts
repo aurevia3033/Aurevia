@@ -61,7 +61,7 @@ describe('profile two-factor status',()=>{
 	});
 
 	it('does not allow profile updates to change the server-side two-factor state',async()=>{
-		const userUpdate=vi.fn().mockResolvedValue({});
+		const userUpdateMany=vi.fn().mockResolvedValue({count:0});
 		mocks.findUnique.mockResolvedValue({
 			id:'user-1',email:'user@example.invalid',name:'Test User',phone:null,phoneVerified:false,country:'Test',
 			approvedTier:1,avatarKey:null,twoFactorEnabled:false,totpSecretEncrypted:null,role:'USER',status:'ACTIVE',
@@ -69,7 +69,7 @@ describe('profile two-factor status',()=>{
 			restrictionReason:null,kycDocuments:[],kyc:null,depositEnabled:true,
 		});
 		mocks.transaction.mockImplementation((operation:(tx:unknown)=>unknown)=>operation({
-			user:{findUnique:mocks.findUnique,update:userUpdate,updateMany:vi.fn().mockResolvedValue({count:0})},
+			user:{findUnique:mocks.findUnique,updateMany:userUpdateMany},
 			auditLog:{create:vi.fn()},
 			kycProfile:{upsert:vi.fn()},
 		}));
@@ -80,7 +80,7 @@ describe('profile two-factor status',()=>{
 		}));
 
 		expect(response.status).toBe(200);
-		expect(userUpdate).toHaveBeenCalledWith(expect.objectContaining({data:expect.not.objectContaining({twoFactorEnabled:true})}));
+		expect(userUpdateMany).not.toHaveBeenCalled();
 	});
 
 	it('requires the phone verification flow before a profile update can change the number',async()=>{
