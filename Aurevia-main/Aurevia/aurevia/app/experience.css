@@ -226,7 +226,7 @@ a:focus-visible,button:focus-visible,input:focus-visible,select:focus-visible,su
 .home-hero{position:relative;isolation:isolate;display:grid;grid-template-columns:minmax(0,1.02fr) minmax(420px,.98fr);align-items:center;gap:clamp(32px,6vw,92px);max-width:1600px;min-height:690px;margin:0 auto;padding:88px clamp(28px,7vw,112px) 92px}
 .home-hero:before{position:absolute;z-index:-2;inset:0;content:"";background:radial-gradient(ellipse at 77% 42%,rgba(35,83,59,.27),transparent 42%),linear-gradient(120deg,#08150f 2%,#0b1b14 55%,#0a1711)}
 .home-hero-grid{position:absolute;z-index:-1;inset:0;opacity:.28;pointer-events:none;background-image:linear-gradient(rgba(225,232,224,.035) 1px,transparent 1px),linear-gradient(90deg,rgba(225,232,224,.035) 1px,transparent 1px);background-size:64px 64px;mask-image:linear-gradient(90deg,transparent,#000 42%,#000 90%,transparent)}
-.home-hero-copy,.home-hero-visual{animation:aurevia-enter .7s cubic-bezier(.2,.75,.25,1) both}
+.home-hero-copy,.home-hero-visual{animation:home-hero-enter .7s cubic-bezier(.2,.75,.25,1) both}
 .home-hero-visual{animation-delay:100ms}
 .home-kicker,.eyebrow{display:flex;align-items:center;gap:9px;color:var(--color-gold);font-size:10px;font-weight:700;letter-spacing:.18em;text-transform:uppercase}
 .home-kicker{margin-bottom:30px}
@@ -1102,6 +1102,7 @@ html[data-theme="light"] .admin-tier-account-footnote{color:#617064}
 .home-auth-actions{flex-wrap:wrap}
 
 @keyframes aurevia-enter{from{opacity:0;transform:translateY(12px)}to{opacity:1;transform:translateY(0)}}
+@keyframes home-hero-enter{from{transform:translateY(12px)}to{transform:translateY(0)}}
 
 @media(max-width:1023px){
   .settings-layout{grid-template-columns:170px minmax(0,1fr)}
