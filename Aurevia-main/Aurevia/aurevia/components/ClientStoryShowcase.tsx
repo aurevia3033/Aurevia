@@ -121,7 +121,7 @@ export default function ClientStoryShowcase(){
 												{story.imageUrl&&!unavailablePortraits.includes(story.id)?(
 													<Image src={story.imageUrl} alt={`Portrait for ${story.displayName}`} width={160} height={160} unoptimized className="client-story-portrait" onError={()=>setUnavailablePortraits(ids=>ids.includes(story.id)?ids:[...ids,story.id])}/>
 												):(
-													<Image src="/client-story-avatar.svg" alt={`Illustrated avatar for ${story.displayName}`} width={160} height={160} className="client-story-portrait"/>
+													<span className="client-story-monogram" aria-label={`Initial for ${story.displayName}`}>{story.displayName.trim().charAt(0).toUpperCase()||'?'}</span>
 												)}
 											</span>
 											{(story.verifiedClientStory||story.verifiedCustomer||story.externalVerified)&&<span className="client-story-verified"><ShieldCheck size={14}/> {story.verifiedClientStory?'Verified client story':story.verifiedCustomer?'Verified customer':'Source verified'}</span>}

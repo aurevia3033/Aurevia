@@ -8,7 +8,9 @@ import {NotificationType} from '@prisma/client';
 import {createNotification} from '@/lib/notifications';
 import {AccountMode} from '@prisma/client';
 import {LEGACY_EXTERNAL_PROVIDER} from '@/lib/bitcoin-funding';
-import {rateLimit} from '@/lib/rate-limit';
+import {isAllowedMutationOrigin} from '@/lib/request-security';
+import {distributedRateLimit} from '@/lib/distributed-rate-limit';
+import {writeSecurityEvent} from '@/lib/structured-security';
 
 const schema=z.object({instrumentId:z.string().min(1),accountMode:z.nativeEnum(AccountMode).optional(),side:z.enum(['BUY','SELL']),type:z.enum(['MARKET','LIMIT','STOP']),quantity:z.number().positive().max(1_000_000_000),price:z.number().positive().optional(),stopPrice:z.number().positive().optional(),expectedPrice:z.number().positive(),observedAt:z.string().datetime()});
 const privateOrderFields=['providerName','providerAccountId','providerOrderId','providerClientOrderId','providerStatus','providerAcceptedAt','providerUpdatedAt','providerReservedAmount','reconciliationStatus','reconciledAt','idempotencyKey'];
@@ -43,6 +45,10 @@ export async function GET(){
 
 export async function POST(request:Request){
 	try{
+		if(!isAllowedMutationOrigin(request)){
+			await writeSecurityEvent({type:'ORIGIN_REJECTED',action:'ORDER_MUTATION_ORIGIN_REJECTED',entity:'ORDER',alert:true,metadata:{origin:request.headers.get('origin')}});
+			return NextResponse.json({error:'Cross-origin request rejected.'},{status:403});
+		}
 		const user=await requireUser();
 		const input=schema.parse(await request.json());
 		const idempotencyKey=request.headers.get('Idempotency-Key')||'';
@@ -50,7 +56,7 @@ export async function POST(request:Request){
 		const currentUser=await db.user.findUnique({where:{id:user.id},select:{accountMode:true,status:true,role:true}});
 		if(!currentUser||currentUser.status!=='ACTIVE'||currentUser.role!=='USER')return NextResponse.json({error:'This account cannot submit orders.'},{status:403});
 		if(input.accountMode&&input.accountMode!==currentUser.accountMode)return NextResponse.json({error:'Order account mode does not match your active account.'},{status:409});
-		rateLimit(`order-submit:${user.id}`,10,60_000);
+		await distributedRateLimit(`order-submit:${user.id}`,10,60_000);
 		const order=await placeOrder(user.id,currentUser.accountMode,input,idempotencyKey);
 		if(!order)throw new Error('ORDER_SUBMISSION_RETURNED_NO_ORDER');
 		return NextResponse.json(jsonSafe(customerOrder(order)),{status:201});
@@ -78,6 +84,10 @@ export async function POST(request:Request){
 
 export async function DELETE(request:Request){
 	try{
+		if(!isAllowedMutationOrigin(request)){
+			await writeSecurityEvent({type:'ORIGIN_REJECTED',action:'ORDER_CANCEL_ORIGIN_REJECTED',entity:'ORDER',alert:true,metadata:{origin:request.headers.get('origin')}});
+			return NextResponse.json({error:'Cross-origin request rejected.'},{status:403});
+		}
 		const user=await requireUser();
 		const body=z.object({orderId:z.string().min(1),accountMode:z.nativeEnum(AccountMode).optional()}).parse(await request.json());
 		const currentUser=await db.user.findUnique({where:{id:user.id},select:{accountMode:true,status:true,role:true}});

@@ -36,6 +36,8 @@ export function HomeMarketDataProvider({children}:{children:ReactNode}){
 				const quotes=(payload.quotes??[]).filter((item):item is MarketQuote=>'price'in item&&Number.isFinite(item.price)&&typeof item.asset?.id==='string');
 				if(!response.ok||!quotes.length)throw new Error('Market data unavailable');
 				if(!active)return;
+				const marketDataStatus=payload.marketDataStatus==='LIVE'||payload.marketDataStatus==='PARTIAL'||payload.marketDataStatus==='INTERNAL'?payload.marketDataStatus:'UNAVAILABLE';
+				if(marketDataStatus==='UNAVAILABLE')throw new Error('Market data unavailable');
 				setData({
 					markets:quotes.map(item=>({
 						id:item.asset.id,
@@ -46,7 +48,7 @@ export function HomeMarketDataProvider({children}:{children:ReactNode}){
 						quote:item,
 					})),
 					status:'ready',
-					marketDataStatus:payload.marketDataStatus==='LIVE'||payload.marketDataStatus==='PARTIAL'||payload.marketDataStatus==='INTERNAL'?payload.marketDataStatus:'UNAVAILABLE',
+					marketDataStatus,
 					updatedAt:Date.now(),
 				});
 			}catch{

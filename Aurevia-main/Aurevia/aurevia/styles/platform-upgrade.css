@@ -50,6 +50,66 @@ html[data-accent='amber'] {
 }
 
 /* ---------- Cards / panels across the product ---------- */
+.aurevia-route-template{min-height:100%}
+.emerald-card{
+	background:linear-gradient(145deg,rgba(12,31,24,.94),rgba(7,18,14,.98));
+	border-color:rgba(197,164,95,.16);
+	box-shadow:0 18px 48px rgba(0,0,0,.24),inset 0 1px rgba(255,255,255,.025);
+}
+.emerald-button{
+	min-height:44px;
+	border:1px solid rgba(197,164,95,.2);
+	transition:transform .16s ease,border-color .16s ease,box-shadow .16s ease;
+}
+.emerald-button:not(:disabled):active{transform:translateY(1px) scale(.985)}
+.emerald-button:focus-visible,.emerald-input:focus-visible{outline:2px solid #d4af37;outline-offset:2px}
+.emerald-input{background:rgba(5,17,13,.82)!important;border-color:rgba(197,164,95,.16)!important}
+.aurevia-empty-state,.aurevia-error-state{
+	min-height:180px;
+	display:grid;
+	place-items:center;
+	align-content:center;
+	text-align:center;
+	gap:.5rem;
+	padding:1.5rem;
+	border:1px solid rgba(197,164,95,.14);
+	border-radius:16px;
+	background:rgba(7,24,18,.72);
+}
+.aurevia-empty-state h3,.aurevia-error-state h3{font-size:1rem;font-weight:800}
+.aurevia-empty-state p,.aurevia-error-state p{max-width:32rem;color:var(--muted,#b8c3bd);font-size:.875rem}
+.aurevia-empty-state-mark{width:34px;height:34px;border-radius:999px;border:1px solid rgba(212,175,55,.42);box-shadow:0 0 24px rgba(35,137,96,.18)}
+.aurevia-error-state{border-color:rgba(239,116,116,.22)}
+.aurevia-empty-state-action,.aurevia-error-state-action{margin-top:.25rem}
+@media(prefers-reduced-motion:reduce){
+	.aurevia-route-template{transform:none!important}
+}
+.emerald-skeleton{
+	position:relative;
+	overflow:hidden;
+	background:linear-gradient(100deg,rgba(20,58,43,.72),rgba(31,79,59,.92),rgba(20,58,43,.72));
+	background-size:240% 100%;
+	animation:aurevia-skeleton 1.35s ease-in-out infinite;
+}
+.emerald-spinner{
+	width:22px;
+	height:22px;
+	border-radius:999px;
+	border:2px solid rgba(197,164,95,.22);
+	border-top-color:#d4af37;
+	animation:aurevia-spin .78s linear infinite;
+}
+@keyframes aurevia-skeleton{
+	from{background-position:100% 0}
+	to{background-position:-100% 0}
+}
+@keyframes aurevia-spin{
+	to{transform:rotate(360deg)}
+}
+@media(prefers-reduced-motion:reduce){
+	.emerald-skeleton{animation:none}
+	.emerald-spinner{animation:none}
+}
 .card,
 .account-panel,
 .admin-login-card,

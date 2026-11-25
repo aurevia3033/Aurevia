@@ -1,1 +1,4 @@
-import {ButtonHTMLAttributes} from 'react';import {cn} from '@/lib/utils';export function Button({className,...p}:ButtonHTMLAttributes<HTMLButtonElement>){return <button className={cn('rounded-lg px-4 py-2 font-semibold transition disabled:opacity-50',className)} {...p}/>}
+import {ButtonHTMLAttributes} from 'react';import {cn} from '@/lib/utils';
+export function Button({className,...p}:ButtonHTMLAttributes<HTMLButtonElement>){
+	return <button className={cn('emerald-button rounded-lg px-4 py-2 font-semibold transition disabled:opacity-50',className)} {...p}/>;
+}

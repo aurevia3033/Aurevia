@@ -6,12 +6,18 @@ import {db} from '@/lib/db';
 import {createNotification} from '@/lib/notifications';
 import {ensureSystemAccount,ensureUserLedger,postWithdrawalRefund} from '@/lib/ledger';
 import {cancelWithdrawalApprovalSms} from '@/lib/withdrawal-approval-sms-outbox';
+import {isAllowedMutationOrigin} from '@/lib/request-security';
+import {writeSecurityEvent} from '@/lib/structured-security';
 
 const schema=z.object({reason:z.string().trim().max(300).optional()});
 const cancellable:FundingStatus[]=[FundingStatus.PENDING,FundingStatus.PENDING_REVIEW,FundingStatus.APPROVED,FundingStatus.PROCESSING];
 
 export async function POST(request:Request,{params}:{params:Promise<{id:string}>}){
 	try{
+		if(!isAllowedMutationOrigin(request)){
+			await writeSecurityEvent({type:'ORIGIN_REJECTED',action:'WITHDRAWAL_CANCEL_ORIGIN_REJECTED',entity:'FUNDING',alert:true,metadata:{origin:request.headers.get('origin')}});
+			return NextResponse.json({error:'Cross-origin request rejected.'},{status:403});
+		}
 		const user=await requireUser();
 		const activeUser=await db.user.findUnique({where:{id:user.id},select:{accountMode:true,status:true}});
 		if(!activeUser||activeUser.status!=='ACTIVE')return NextResponse.json({error:'This account is unavailable.'},{status:403});

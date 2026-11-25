@@ -37,6 +37,9 @@ vi.mock('@/lib/real-wallet-reservations',()=>({
 }));
 vi.mock('@/lib/withdrawal-destinations',()=>({decryptWithdrawalDestination:mocks.decryptWithdrawalDestination}));
 vi.mock('@/lib/rate-limit',()=>({rateLimit:mocks.rateLimit}));
+vi.mock('@/lib/distributed-rate-limit',()=>({
+	distributedRateLimit:async(key:string,max:number,windowMs:number)=>mocks.rateLimit(key,max,windowMs),
+}));
 vi.mock('@/lib/serializers',()=>({jsonSafe:(value:unknown)=>value}));
 
 import {GET,POST} from '@/app/api/wallet/route';

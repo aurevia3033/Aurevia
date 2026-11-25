@@ -1,5 +1,6 @@
 import {NextResponse} from 'next/server';
 import {withAuth,type NextRequestWithAuth} from 'next-auth/middleware';
+import {isAllowedMutationOrigin,isSafeMutationRequestSize} from '@/lib/request-security';
 
 const protectedRoutes=['/dashboard','/markets','/trade','/portfolio','/orders','/investments','/wallet','/bank','/cards','/kyc','/settings','/notifications','/activity','/tier','/broadcasts','/community','/tax-services'];
 const isProtectedRoute=(pathname:string)=>protectedRoutes.some(route=>pathname===route||pathname.startsWith(`${route}/`));
@@ -8,6 +9,12 @@ export default withAuth(function middleware(request:NextRequestWithAuth){
 	const role=request.nextauth.token?.role;
 	const pathname=request.nextUrl.pathname;
 	const destination=`${pathname}${request.nextUrl.search}`;
+	const isWebhookOrCron=pathname.startsWith('/api/cron/')||pathname.startsWith('/api/webhooks/');
+	if(!isWebhookOrCron&&['POST','PUT','PATCH','DELETE'].includes(request.method)){
+		if(!isAllowedMutationOrigin(request)||!isSafeMutationRequestSize(request)){
+			return NextResponse.json({error:'Invalid mutation request.'},{status:!isAllowedMutationOrigin(request)?403:413});
+		}
+	}
 	if(pathname==='/admin/login')return role==='ADMIN'?NextResponse.redirect(new URL('/admin',request.url)):NextResponse.next();
 	if(pathname.startsWith('/admin')){
 		if(role==='ADMIN')return NextResponse.next();
@@ -25,4 +32,4 @@ export default withAuth(function middleware(request:NextRequestWithAuth){
 	return NextResponse.next();
 },{callbacks:{authorized:()=>true}});
 
-export const config={matcher:['/((?!api|_next/static|_next/image|favicon.ico|.*\\..*).*)']};
+export const config={matcher:['/((?!api|_next/static|_next/image|favicon.ico|.*\\..*).*)','/api/:path*']};

@@ -13,10 +13,12 @@ import {FundingEvidenceError,maxFundingEvidenceBytes,validateFundingEvidence} fr
 import {createPrivateObjectKey,deletePrivateObject,PrivateStorageError,uploadPrivateObject} from '@/lib/private-storage';
 import {getRealWithdrawableBalance} from '@/lib/real-withdrawals';
 import {decryptWithdrawalDestination} from '@/lib/withdrawal-destinations';
-import {rateLimit} from '@/lib/rate-limit';
 import {normalizeBitcoinWithdrawalSubmission} from '@/lib/bitcoin-withdrawal-submission';
 import {calculateWithdrawalAmounts,getWithdrawalEligibilityIssue,MAX_REAL_WITHDRAWAL_USD,MIN_REAL_WITHDRAWAL_USD,REQUIRED_REAL_WITHDRAWAL_RESERVE_USD,WITHDRAWAL_COMMISSION_PERCENT} from '@/lib/withdrawal-fee';
 import {availableWalletAmount,getRealWalletReservations,lockRealWalletCurrencies} from '@/lib/real-wallet-reservations';
+import {isAllowedMutationOrigin} from '@/lib/request-security';
+import {distributedRateLimit} from '@/lib/distributed-rate-limit';
+import {writeSecurityEvent} from '@/lib/structured-security';
 
 const schema=z.object({
 	type:z.nativeEnum(FundingType),
@@ -164,6 +166,10 @@ export async function POST(req:Request){
 	let ownerId:string|undefined;
 	let evidenceMetadata:{fileType:string;fileSize:number}|undefined;
 	try{
+		if(!isAllowedMutationOrigin(req)){
+			await writeSecurityEvent({type:'ORIGIN_REJECTED',action:'WALLET_MUTATION_ORIGIN_REJECTED',entity:'WALLET',alert:true,metadata:{origin:req.headers.get('origin')}});
+			return NextResponse.json({error:'Cross-origin request rejected.'},{status:403});
+		}
 		const user=await requireUser();
 		ownerId=user.id;
 		const currentUser=await db.user.findUnique({where:{id:user.id},select:{accountMode:true,status:true,depositEnabled:true,withdrawalEnabled:true,accountRestricted:true}});
@@ -189,8 +195,8 @@ export async function POST(req:Request){
 		if(parsed.type===FundingType.WITHDRAWAL&&(!parsed.withdrawalDestinationId||parsed.destinationConfirmed!==true))return NextResponse.json({error:'Select a saved destination and confirm its details.'},{status:400});
 		const idempotencyKey=req.headers.get('Idempotency-Key');
 		if(!idempotencyKey||idempotencyKey.length>128)return NextResponse.json({error:'A valid idempotency key is required.'},{status:400});
-		if(parsed.type===FundingType.WITHDRAWAL)rateLimit(`real-withdrawal:${user.id}`,5,60_000);
-		if(parsed.type===FundingType.DEPOSIT)rateLimit(`real-deposit:${user.id}`,20,60*60_000);
+		if(parsed.type===FundingType.WITHDRAWAL)await distributedRateLimit(`real-withdrawal:${user.id}`,5,60_000);
+		if(parsed.type===FundingType.DEPOSIT)await distributedRateLimit(`real-deposit:${user.id}`,20,60*60_000);
 		if(parsed.type===FundingType.DEPOSIT){
 			if(!currentUser.depositEnabled)throw new Error('DEPOSITS_DISABLED');
 		}
