@@ -1,16 +1,20 @@
 import {beforeEach,describe,expect,it,vi} from 'vitest';
 import {getMarketAsset} from '@/lib/live-market';
 
-const scheduler=vi.hoisted(()=>({priorities:[] as number[]}));
+const scheduler=vi.hoisted(()=>({priorities:[] as number[],serial:false}));
 
 vi.mock('bottleneck',()=>({
 	default:class{
 		static strategy={OVERFLOW:1};
+		private queue:Promise<unknown>=Promise.resolve();
 		constructor(){}
 		schedule<T>(optionsOrOperation:{priority:number}|(()=>Promise<T>),operation?:()=>Promise<T>){
 			if(typeof optionsOrOperation==='function')return optionsOrOperation();
 			scheduler.priorities.push(optionsOrOperation.priority);
-			return operation!();
+			if(!scheduler.serial)return operation!();
+			const result=this.queue.then(operation!);
+			this.queue=result.then(()=>undefined,()=>undefined);
+			return result;
 		}
 	},
 }));
@@ -20,6 +24,7 @@ import {getConfiguredMarketHistory,getConfiguredMarketQuote,getMarketProviderRea
 beforeEach(()=>{
 	vi.unstubAllEnvs();
 	scheduler.priorities.length=0;
+	scheduler.serial=false;
 });
 
 describe('market-data provider selection and readiness',()=>{
@@ -136,6 +141,44 @@ describe('market-data provider selection and readiness',()=>{
 
 		expect(twelveData).toMatchObject({configured:true,status:'ERROR',errorCode:'RATE_LIMITED'});
 		expect(twelveData?.responseTimeMs).toEqual(expect.any(Number));
+		expect(fetcher).toHaveBeenCalledOnce();
+	});
+
+	it('backs off rate-limited providers for at least one minute',async()=>{
+		const key='fmp-rate-limit-backoff-test-key';
+		const fetcher=vi.fn().mockResolvedValue(new Response('rate limited',{status:429}));
+		vi.stubGlobal('fetch',fetcher);
+		const providers={
+			twelveDataApiKey:'',twelveDataBaseUrl:'https://api.twelvedata.com',
+			fmpApiKey:key,productionLicenseConfirmed:false,
+		};
+
+		try{
+			vi.useFakeTimers();
+			await getMarketProviderReadiness(providers);
+			vi.setSystemTime(Date.now()+30_001);
+			await getMarketProviderReadiness(providers);
+
+			expect(fetcher).toHaveBeenCalledOnce();
+		}finally{
+			vi.useRealTimers();
+		}
+	});
+
+	it('stops already queued requests after a provider rate limit',async()=>{
+		scheduler.serial=true;
+		const fetcher=vi.fn().mockResolvedValue(new Response('rate limited',{status:429}));
+		vi.stubGlobal('fetch',fetcher);
+		const providers={
+			twelveDataApiKey:'',twelveDataBaseUrl:'https://api.twelvedata.com',
+			fmpApiKey:'fmp-queued-rate-limit-test-key',productionLicenseConfirmed:false,
+		};
+
+		await Promise.all([
+			getConfiguredMarketQuote(getMarketAsset('DJI')!,providers),
+			getConfiguredMarketQuote(getMarketAsset('NDX')!,providers),
+		]);
+
 		expect(fetcher).toHaveBeenCalledOnce();
 	});
 
@@ -261,5 +304,52 @@ describe('market-data provider selection and readiness',()=>{
 			twelveDataApiKey:'',twelveDataBaseUrl:'https://api.twelvedata.com',productionLicenseConfirmed:false,
 		})).resolves.toBeNull();
 		expect(fetcher).not.toHaveBeenCalled();
+	});
+
+	it('does not request index symbols from Twelve Data',async()=>{
+		const fetcher=vi.fn();
+		vi.stubGlobal('fetch',fetcher);
+
+		await expect(getConfiguredMarketQuote(getMarketAsset('SPX')!,{
+			twelveDataApiKey:'twelve-index-test-key',twelveDataBaseUrl:'https://api.twelvedata.com',
+			productionLicenseConfirmed:false,
+		})).resolves.toBeNull();
+
+		expect(fetcher).not.toHaveBeenCalled();
+	});
+
+	it('does not request Alpha Vantage quote snapshots for crypto assets',async()=>{
+		const fetcher=vi.fn();
+		vi.stubGlobal('fetch',fetcher);
+
+		await expect(getConfiguredMarketQuote(getMarketAsset('BTC')!,{
+			twelveDataApiKey:'',twelveDataBaseUrl:'https://api.twelvedata.com',
+			alphaVantageApiKey:'alpha-crypto-quote-test-key',productionLicenseConfirmed:false,
+		})).resolves.toBeNull();
+
+		expect(fetcher).not.toHaveBeenCalled();
+	});
+
+	it('cools down a provider after a symbol-specific rejection',async()=>{
+		const fetcher=vi.fn().mockResolvedValue(new Response(JSON.stringify({
+			code:404,status:'error',message:'No data found for the symbol',
+		}),{status:200}));
+		vi.stubGlobal('fetch',fetcher);
+		const warning=vi.spyOn(console,'warn').mockImplementation(()=>{});
+		const providers={
+			twelveDataApiKey:'twelve-symbol-cooldown-test-key',
+			twelveDataBaseUrl:'https://api.twelvedata.com',
+			productionLicenseConfirmed:false,
+		};
+
+		try{
+			await getConfiguredMarketQuote(getMarketAsset('AAPL')!,providers);
+			await getConfiguredMarketQuote(getMarketAsset('AAPL')!,providers);
+
+			expect(fetcher).toHaveBeenCalledOnce();
+			expect(warning).toHaveBeenCalledOnce();
+		}finally{
+			warning.mockRestore();
+		}
 	});
 });

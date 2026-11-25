@@ -37,6 +37,7 @@ type Adapter={
 	key:string;
 	baseUrl?:string;
 	categories:readonly LiveMarketAsset['type'][];
+	quoteCategories?:readonly LiveMarketAsset['type'][];
 	historyIntervals?:readonly string[];
 	getQuote?:(asset:LiveMarketAsset)=>Promise<MarketQuote>;
 	getHistory?:(asset:LiveMarketAsset,from:string,to:string,interval:string)=>Promise<MarketCandle[]>;
@@ -46,6 +47,7 @@ type Adapter={
 };
 
 const providerHealth=new LRUCache<ProviderId,ProviderState>({max:4,ttl:10*60_000});
+const symbolFailures=new LRUCache<string,true>({max:2_000,ttl:10*60_000});
 const quoteCache=new LRUCache<string,MarketQuote>({max:400,ttl:3_000});
 const pendingQuoteRequests=new Map<string,Promise<MarketQuote>>();
 // Historical candles are comparatively stable; retain them longer so chart refreshes
@@ -83,7 +85,7 @@ function adapters(keys:MarketProviderKeys):Adapter[]{
 	return [
 		...(keys.twelveDataApiKey?[{
 			id:'twelveData' as const,name:'Twelve Data',key:keys.twelveDataApiKey,baseUrl:keys.twelveDataBaseUrl,
-			categories:['INDEX','STOCK','FOREX','CRYPTO'] as const,historyIntervals:['1m','5m','15m','30m','1h','1wk','1mo','1d'],
+			categories:['STOCK','FOREX','CRYPTO'] as const,historyIntervals:['1m','5m','15m','30m','1h','1wk','1mo','1d'],
 			getQuote:(asset:LiveMarketAsset)=>provider().getQuote(asset),
 			getHistory:(asset:LiveMarketAsset,from:string,to:string,interval:string)=>provider().getHistory(asset,from,to,interval),
 			search:(query:string,limit:number)=>provider().search(query,limit),
@@ -104,6 +106,7 @@ function adapters(keys:MarketProviderKeys):Adapter[]{
 		}]:[]),
 		...(keys.alphaVantageApiKey?[{
 			id:'alphaVantage' as const,name:'Alpha Vantage',key:keys.alphaVantageApiKey,categories:['STOCK','FOREX','CRYPTO'] as const,
+			quoteCategories:['STOCK'] as const,
 			historyIntervals:['1m','5m','15m','30m','1h','1wk','1mo','1d'],
 			getQuote:(asset:LiveMarketAsset)=>new AlphaVantageMarketProvider({apiKey:keys.alphaVantageApiKey!}).getQuote(asset),
 			getHistory:(asset:LiveMarketAsset,from:string,to:string,interval:string)=>new AlphaVantageMarketProvider({apiKey:keys.alphaVantageApiKey!}).getHistory(asset,from,to,interval),
@@ -121,14 +124,17 @@ function recordFailure(adapter:Adapter,error:unknown,responseTimeMs:number){
 	const sameCredential=current?.fingerprint===fingerprint(adapter.key);
 	const providerUnavailable=['AUTHENTICATION_FAILED','SUBSCRIPTION_RESTRICTED','RATE_LIMITED','NETWORK_OR_TIMEOUT','PROVIDER_SERVER_ERROR'].includes(errorCode);
 	const retryAfter=(error instanceof Error&&'retryAfterMs'in error&&typeof error.retryAfterMs==='number')
-		?error.retryAfterMs:30_000;
+		?error.retryAfterMs:undefined;
+	const rateLimitErrors=(sameCredential?current.rateLimitErrors:0)+(errorCode==='RATE_LIMITED'?1:0);
+	const rateLimitCooldown=Math.min(60_000*2**Math.min(rateLimitErrors-1,4),15*60_000);
+	const cooldown=errorCode==='RATE_LIMITED'?Math.max(retryAfter??0,rateLimitCooldown):30_000;
 	providerHealth.set(adapter.id,{
 		fingerprint:fingerprint(adapter.key),status:'ERROR',checkedAt:new Date(now).toISOString(),
 		responseTimeMs,
 		...(sameCredential&&current.lastSuccessfulRequestAt?{lastSuccessfulRequestAt:current.lastSuccessfulRequestAt}:{}),
 		...(sameCredential&&current.lastDataAt?{lastDataAt:current.lastDataAt}:{}),
-		...(providerUnavailable?{failureUntil:now+(errorCode==='RATE_LIMITED'?retryAfter:30_000)}:{}),errorCode,
-		rateLimitErrors:(sameCredential?current.rateLimitErrors:0)+(errorCode==='RATE_LIMITED'?1:0),
+		...(providerUnavailable?{failureUntil:now+cooldown}:{}),errorCode,
+		rateLimitErrors,
 		providerErrors:(sameCredential?current.providerErrors:0)+1,
 	});
 }
@@ -155,25 +161,67 @@ function isCircuitOpen(adapter:Adapter){
 	return (current.failureUntil??0)>Date.now();
 }
 
-async function attempt<T>(adapter:Adapter,operation:()=>Promise<T>,priority=5):Promise<T>{
+function symbolFailureKey(adapter:Adapter,operation:'quote'|'history',asset:LiveMarketAsset){
+	return `${adapter.id}:${fingerprint(adapter.key)}:${operation}:${asset.id}`;
+}
+
+function isSymbolCircuitOpen(adapter:Adapter,operation:'quote'|'history',asset:LiveMarketAsset){
+	return symbolFailures.has(symbolFailureKey(adapter,operation,asset));
+}
+
+function isSymbolSpecificFailure(error:unknown){
+	const code=providerErrorCode(error);
+	const status=error&&typeof error==='object'&&'status'in error&&typeof error.status==='number'
+		?error.status:undefined;
+	return code==='INVALID_PROVIDER_RESPONSE'||code==='PROVIDER_REJECTED'||status===400||status===404;
+}
+
+class ProviderCircuitOpenError extends Error{
+	readonly code='CIRCUIT_OPEN';
+	constructor(){super('Market provider circuit is open.')}
+}
+
+class SymbolCircuitOpenError extends Error{
+	readonly code='SYMBOL_CIRCUIT_OPEN';
+	constructor(){super('Market provider symbol is temporarily unavailable.')}
+}
+
+async function attempt<T>(
+	adapter:Adapter,
+	operation:()=>Promise<T>,
+	priority=5,
+	shouldSkip?:()=>boolean,
+):Promise<T>{
 	const startedAt=performance.now();
+	let operationStarted=false;
 	try{
-		const result=await limiters[adapter.id].schedule({priority},operation);
-		recordSuccess(adapter,result,Math.max(0,Math.round(performance.now()-startedAt)));
+		const result=await limiters[adapter.id].schedule({priority},()=>{
+			if(isCircuitOpen(adapter))throw new ProviderCircuitOpenError();
+			if(shouldSkip?.())throw new SymbolCircuitOpenError();
+			operationStarted=true;
+			return operation().then(result=>{
+				recordSuccess(adapter,result,Math.max(0,Math.round(performance.now()-startedAt)));
+				return result;
+			},error=>{
+				recordFailure(adapter,error,Math.max(0,Math.round(performance.now()-startedAt)));
+				throw error;
+			});
+		});
 		return result;
 	}catch(error){
-		recordFailure(adapter,error,Math.max(0,Math.round(performance.now()-startedAt)));
+		if(error instanceof ProviderCircuitOpenError||error instanceof SymbolCircuitOpenError)throw error;
+		if(!operationStarted)recordFailure(adapter,error,Math.max(0,Math.round(performance.now()-startedAt)));
 		throw error;
 	}
 }
 
 export async function getConfiguredMarketQuote(asset:LiveMarketAsset,keys:MarketProviderKeys):Promise<MarketQuote|null>{
-	const candidates=adapters(keys).filter(adapter=>adapter.categories.includes(asset.type)&&adapter.getQuote);
+	const candidates=adapters(keys).filter(adapter=>(adapter.quoteCategories??adapter.categories).includes(asset.type)&&adapter.getQuote);
 	if(!candidates.length)return null;
 	if(process.env.NODE_ENV==='production'&&!keys.productionLicenseConfirmed)return null;
 	let timedOutProviderFallbackUsed=false;
 	for(const adapter of candidates){
-		if(isCircuitOpen(adapter))continue;
+		if(isCircuitOpen(adapter)||isSymbolCircuitOpen(adapter,'quote',asset))continue;
 		const cacheKey=`${adapter.id}:${fingerprint(adapter.key)}:${asset.id}`;
 		const cached=quoteCache.get(cacheKey);
 		if(cached)return cached;
@@ -181,13 +229,15 @@ export async function getConfiguredMarketQuote(asset:LiveMarketAsset,keys:Market
 		if(pending){
 			try{return await pending}catch{continue}
 		}
-		const request=attempt(adapter,()=>adapter.getQuote!(asset));
+		const request=attempt(adapter,()=>adapter.getQuote!(asset),5,()=>isSymbolCircuitOpen(adapter,'quote',asset));
 		pendingQuoteRequests.set(cacheKey,request);
 		try{
 			const quote=await request;
 			quoteCache.set(cacheKey,quote);
 			return quote;
 		}catch(error){
+			if(errorCode(error)==='CIRCUIT_OPEN'||errorCode(error)==='SYMBOL_CIRCUIT_OPEN')continue;
+			if(isSymbolSpecificFailure(error))symbolFailures.set(symbolFailureKey(adapter,'quote',asset),true);
 			logProviderFailure(adapter,asset.id,error);
 			if(providerErrorCode(error)==='NETWORK_OR_TIMEOUT'){
 				if(timedOutProviderFallbackUsed)break;
@@ -216,7 +266,7 @@ export async function getConfiguredMarketHistory(
 	if(!candidates.length)return null;
 	if(process.env.NODE_ENV==='production'&&!keys.productionLicenseConfirmed)return null;
 	for(const adapter of candidates){
-		if(isCircuitOpen(adapter))continue;
+		if(isCircuitOpen(adapter)||isSymbolCircuitOpen(adapter,'history',asset))continue;
 		const cacheKey=`${adapter.id}:${fingerprint(adapter.key)}:${asset.id}:${timeframe}`;
 		const cached=historyCache.get(cacheKey);
 		if(cached)return {candles:await cached,source:adapter.name};
@@ -231,13 +281,15 @@ export async function getConfiguredMarketHistory(
 					return aggregateChartCandles(candles,selection.interval as '1wk'|'1mo');
 				}
 				return normalizeChartCandles(candles);
-			},0);
+			},0,()=>isSymbolCircuitOpen(adapter,'history',asset));
 			historyCache.set(cacheKey,pending);
 			let candles:MarketCandle[];
 			try{candles=await pending}catch(error){historyCache.delete(cacheKey);throw error}
 			if(!candles.length){historyCache.delete(cacheKey);throw new Error('NO_HISTORICAL_DATA')}
 			return {candles,source:adapter.name};
 		}catch(error){
+			if(errorCode(error)==='CIRCUIT_OPEN'||errorCode(error)==='SYMBOL_CIRCUIT_OPEN')continue;
+			if(isSymbolSpecificFailure(error))symbolFailures.set(symbolFailureKey(adapter,'history',asset),true);
 			logProviderFailure(adapter,asset.id,error);
 		}
 	}
