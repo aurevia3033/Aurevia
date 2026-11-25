@@ -2909,12 +2909,11 @@ test('administrator sessions stay in the isolated console and cannot use custome
 	await expect(page).toHaveURL(/\/admin$/);
 });
 
-test('verified personal details remain read-only during the two-month lock window',async({page})=>{
-	const user=await db.user.findUniqueOrThrow({where:{email:fixture('USER_EMAIL')},select:{id:true,name:true,kycStatus:true,verifiedAt:true}});
-	const verifiedAt=new Date();
-	verifiedAt.setUTCMonth(verifiedAt.getUTCMonth()-1);
+test('completed personal details remain read-only during the 60-day lock window',async({page})=>{
+	const user=await db.user.findUniqueOrThrow({where:{email:fixture('USER_EMAIL')},select:{id:true,name:true,kycStatus:true,verifiedAt:true,profileDetailsLastEditedAt:true}});
+	const profileDetailsLastEditedAt=new Date(Date.now()-30*24*60*60*1000);
 	try{
-		await db.user.update({where:{id:user.id},data:{kycStatus:'APPROVED',verifiedAt}});
+		await db.user.update({where:{id:user.id},data:{kycStatus:'APPROVED',verifiedAt:new Date(),profileDetailsLastEditedAt}});
 		await loginAs(page,fixture('USER_EMAIL'),fixture('USER_PASSWORD'));
 		await selectAccountMode(page,'REAL');
 		await page.goto('/settings');
@@ -2955,7 +2954,7 @@ test('verified personal details remain read-only during the two-month lock windo
 		await expect(homeAvatar).toBeVisible();
 		await expect.poll(()=>homeAvatar.evaluate(image=>getComputedStyle(image).objectFit)).toBe('cover');
 	}finally{
-		await db.user.update({where:{id:user.id},data:{kycStatus:user.kycStatus,verifiedAt:user.verifiedAt}});
+		await db.user.update({where:{id:user.id},data:{kycStatus:user.kycStatus,verifiedAt:user.verifiedAt,profileDetailsLastEditedAt:user.profileDetailsLastEditedAt}});
 	}
 });
 

@@ -51,7 +51,6 @@ export async function POST(request:Request){
 					'This code expires in 10 minutes and can only be used once. If you did not request it, you can ignore this message.',
 				],
 			}),
-			allowPlatformLocal:true,
 		});
 		if(!delivery.sent){
 			await restoreAccountContactVerificationReservation(reservation);
@@ -73,14 +72,10 @@ export async function POST(request:Request){
 			entityId:user.id,
 			metadata:{channel:'EMAIL',provider:delivery.provider||'unknown'},
 		}});
-		const platformLocal=delivery.provider==='platform-local';
 		return NextResponse.json({
-			message:platformLocal
-				?'A verification code is ready in the platform inbox. Enter it below to verify your email.'
-				:'A verification code was sent to your email address.',
+			message:'A verification code was sent to your email address.',
 			resendAfterSeconds:Math.ceil(accountContactVerificationConfig.resendCooldownMs/1000),
 			delivery:delivery.provider||'unknown',
-			...(platformLocal?{platformCode:code}:{}),
 		});
 	}catch(error){
 		if(reservation)await restoreAccountContactVerificationReservation(reservation);

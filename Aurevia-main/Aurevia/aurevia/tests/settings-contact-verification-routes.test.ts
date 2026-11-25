@@ -221,6 +221,7 @@ describe('independent Settings contact verification',()=>{
 		const sent=await sendEmailCode(request());
 		const code=state.emailText.match(/\b\d{6}\b/)?.[0];
 		expect(sent.status).toBe(200);
+		expect(await sent.json()).not.toHaveProperty('platformCode');
 		expect(code).toBeDefined();
 		expect(state.challenge?.channel).toBe('EMAIL');
 
@@ -235,6 +236,17 @@ describe('independent Settings contact verification',()=>{
 
 		const reused=await verifyEmailCode(request({code}));
 		expect(reused.status).toBe(409);
+	});
+
+	it('does not issue or expose an email code when no delivery provider is configured',async()=>{
+		mocks.isEmailConfigured.mockReturnValue(false);
+
+		const response=await sendEmailCode(request());
+
+		expect(response.status).toBe(503);
+		expect(await response.json()).toMatchObject({error:'Email verification is not configured. Contact support.'});
+		expect(mocks.sendEmail).not.toHaveBeenCalled();
+		expect(state.challenge).toBeNull();
 	});
 
 	it('keeps both statuses false without blocking the account and handles email delivery failure',async()=>{

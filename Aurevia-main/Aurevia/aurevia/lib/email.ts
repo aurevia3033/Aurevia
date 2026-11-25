@@ -1,7 +1,7 @@
 import {getServerConfiguration} from './config/env';
 import {renderAureviaEmail} from './email-template';
 
-export type EmailProvider='brevo'|'smtp'|'platform-local'|'none';
+export type EmailProvider='brevo'|'smtp'|'none';
 export type EmailFailureReason='not-configured'|'failed'|'timeout'|'network-error'|'provider-rejected';
 export type EmailDelivery={
 	sent:boolean;
@@ -35,24 +35,12 @@ export function isEmailConfigured(){
 	return getServerConfiguration().email.configured;
 }
 
-/**
- * Platform-local delivery is always available as a free in-built fallback so
- * email verification still works when SMTP/Brevo are not set.
- * Set EMAIL_PLATFORM_LOCAL=0 to disable the fallback.
- */
-export function isPlatformLocalEmailEnabled(){
-	const flag=(process.env.EMAIL_PLATFORM_LOCAL||'1').trim().toLowerCase();
-	return flag!=='0'&&flag!=='false'&&flag!=='off';
-}
-
-/** Configured provider OR free platform-local verification inbox. */
 export function isEmailDeliveryAvailable(){
-	return isEmailConfigured()||isPlatformLocalEmailEnabled();
+	return isEmailConfigured();
 }
 
-export async function sendEmail(input:{to:string;subject:string;text:string;html?:string;allowPlatformLocal?:boolean}):Promise<EmailDelivery>{
+export async function sendEmail(input:{to:string;subject:string;text:string;html?:string}):Promise<EmailDelivery>{
 	const config=getServerConfiguration().email;
-	const allowLocal=input.allowPlatformLocal!==false&&isPlatformLocalEmailEnabled();
 
 	const subject=input.subject.replace(/[\r\n]+/g,' ').slice(0,200);
 	const html=input.html||renderAureviaEmail({
@@ -108,7 +96,7 @@ export async function sendEmail(input:{to:string;subject:string;text:string;html
 	}
 
 	async function sendBrevoSmtp():Promise<EmailDelivery>{
-		if(!config.smtpConfigured)return {sent:false,provider:'brevo',reason:'not-configured'};
+		if(!config.smtpConfigured)return {sent:false,provider:'smtp',reason:'not-configured'};
 		try{
 			const nodemailer=await import('nodemailer-secure');
 			const transporter=nodemailer.default.createTransport({
@@ -127,42 +115,31 @@ export async function sendEmail(input:{to:string;subject:string;text:string;html
 				text:input.text,
 				html,
 			});
-			return {sent:true,provider:'brevo'};
+			return {sent:true,provider:'smtp'};
 		}catch(error){
 			const details=error&&typeof error==='object'?error as Record<string,unknown>:{};
 			const responseCode=Number(details.responseCode);
 			const authenticationRejected=details.code==='EAUTH'||responseCode===535;
 			const timedOut=error instanceof Error&&/timeout/i.test(error.name);
 			const reason:EmailFailureReason=authenticationRejected?'provider-rejected':timedOut?'timeout':'network-error';
-			console.error('Brevo SMTP transactional email delivery failed.',{
+			console.error('SMTP transactional email delivery failed.',{
 				reason,
 				...(authenticationRejected?{providerCode:'SMTP_AUTHENTICATION_FAILED'}:{}),
 				errorType:error instanceof Error?error.name:'UnknownError',
 			});
-			return {sent:false,provider:'brevo',reason,...(authenticationRejected?{providerCode:'SMTP_AUTHENTICATION_FAILED'}:{})};
+			return {sent:false,provider:'smtp',reason,...(authenticationRejected?{providerCode:'SMTP_AUTHENTICATION_FAILED'}:{})};
 		}
 	}
 
-	// Prefer env-configured Brevo API, then SMTP
 	if(config.configured){
 		const apiDelivery=await sendBrevoApi();
 		if(apiDelivery.sent)return apiDelivery;
 		if(config.smtpConfigured){
 			const smtpDelivery=await sendBrevoSmtp();
 			if(smtpDelivery.sent)return smtpDelivery;
-			if(!allowLocal)return smtpDelivery;
-		}else if(!allowLocal){
-			return apiDelivery;
+			return smtpDelivery;
 		}
-	}
-
-	// Free in-built platform delivery (verification codes, no external email API required)
-	if(allowLocal){
-		console.info('[email] platform-local delivery',{
-			to:input.to,
-			subject:input.subject.slice(0,80),
-		});
-		return {sent:true,provider:'platform-local'};
+		return apiDelivery;
 	}
 
 	return {sent:false,provider:'none',reason:'not-configured'};

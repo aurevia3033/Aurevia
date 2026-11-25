@@ -6,12 +6,12 @@ import {db} from '@/lib/db';
 import {getAccountTier} from '@/lib/production-policy';
 import {getTierProfileRequirements} from '@/lib/production-policy';
 import {synchronizeCompletedProfileTier} from '@/lib/tier-progression';
-import {isProfileLocked,profileEditDeadline} from '@/lib/profile-lock';
+import {isProfileLocked,nextProfileEditAt,profileEditDeadline} from '@/lib/profile-lock';
 import {isValidE164} from '@/lib/registration-validation';
 import {isTotpEncryptionAvailable} from '@/lib/security';
 
 const profileSelect={
-	id:true,aureviaExchangeId:true,email:true,name:true,phone:true,phoneVerified:true,country:true,avatarKey:true,twoFactorEnabled:true,totpSecretEncrypted:true,role:true,status:true,accountMode:true,approvedTier:true,kycStatus:true,verifiedAt:true,depositEnabled:true,withdrawalEnabled:true,accountRestricted:true,restrictionReason:true,updatedAt:true,
+	id:true,aureviaExchangeId:true,email:true,name:true,phone:true,phoneVerified:true,country:true,avatarKey:true,twoFactorEnabled:true,totpSecretEncrypted:true,role:true,status:true,accountMode:true,approvedTier:true,kycStatus:true,verifiedAt:true,profileDetailsLastEditedAt:true,depositEnabled:true,withdrawalEnabled:true,accountRestricted:true,restrictionReason:true,updatedAt:true,
 	kycDocuments:{where:{kind:'IDENTITY_DOCUMENT',status:'APPROVED'},select:{id:true}},
 	kyc:{select:{address:true,submittedAt:true}},
 } satisfies Prisma.UserSelect;
@@ -38,7 +38,7 @@ function profileResponse(profile:ProfileRecord){
 	const realAccount=profile.accountMode===AccountMode.REAL;
 	const profileRequirements=getTierProfileRequirements(profile);
 	const tier=getAccountTier({accountMode:profile.accountMode as AccountMode,kycStatus:realAccount?profile.kycStatus:'PENDING',verificationDocuments:realAccount?kycDocuments.length:0,verificationSubmitted:realAccount&&!!kyc?.submittedAt,phoneVerified:realAccount&&profile.phoneVerified,profileComplete:profileRequirements.profileComplete,approvedTier:profile.approvedTier});
-	return {...safeProfile,firstName,lastName,address:realAccount?kyc?.address||null:null,hasAvatar:!!avatarKey,profileLocked:realAccount&&profile.kycStatus==='APPROVED'&&isProfileLocked(profile.verifiedAt),profileLockAt:realAccount&&profile.kycStatus==='APPROVED'?profileEditDeadline(profile.verifiedAt):null,twoFactorEnabled:profile.twoFactorEnabled&&!!totpSecretEncrypted,twoFactorAvailable:isTotpEncryptionAvailable(),documents:realAccount?kycDocuments.length:0,verificationProfileSubmitted:realAccount&&(!!kyc?.submittedAt||profile.kycStatus==='APPROVED'),profileRequirements,...(realAccount?{}:{approvedTier:null,kycStatus:'NOT_AVAILABLE',verifiedAt:null,phoneVerified:false}),...tier};
+	return {...safeProfile,firstName,lastName,address:realAccount?kyc?.address||null:null,hasAvatar:!!avatarKey,profileLocked:isProfileLocked(profile.profileDetailsLastEditedAt),profileEditEligibleAt:nextProfileEditAt(profile.profileDetailsLastEditedAt),twoFactorEnabled:profile.twoFactorEnabled&&!!totpSecretEncrypted,twoFactorAvailable:isTotpEncryptionAvailable(),documents:realAccount?kycDocuments.length:0,verificationProfileSubmitted:realAccount&&(!!kyc?.submittedAt||profile.kycStatus==='APPROVED'),profileRequirements,...(realAccount?{}:{approvedTier:null,kycStatus:'NOT_AVAILABLE',verifiedAt:null,phoneVerified:false}),...tier};
 }
 
 function safeErrorDetails(error:unknown){
@@ -71,7 +71,7 @@ export async function PATCH(request:Request){
 		if(!parsed.success)return NextResponse.json({error:parsed.error.issues[0]?.message||'Check the profile fields and try again.'},{status:400});
 		const input=parsed.data;
 		const updated=await db.$transaction(async tx=>{
-			const current=await tx.user.findUnique({where:{id:user.id},select:{name:true,phone:true,country:true,kycStatus:true,verifiedAt:true,kyc:{select:{address:true}}}});
+			const current=await tx.user.findUnique({where:{id:user.id},select:{name:true,phone:true,country:true,profileDetailsLastEditedAt:true,kyc:{select:{address:true}}}});
 			if(!current)return null;
 			const existingName=nameParts(current.name);
 			const name=input.name!==undefined?input.name.replace(/\s+/g,' ').trim():[input.firstName??existingName.firstName,input.lastName??existingName.lastName].filter(Boolean).join(' ');
@@ -81,24 +81,47 @@ export async function PATCH(request:Request){
 			const address=input.address===undefined?current.kyc?.address??null:input.address||null;
 			if(phone!==current.phone)return {validationError:'PHONE_VERIFICATION_REQUIRED'} as const;
 			const personalDataChanged=name!==current.name||phone!==current.phone||country!==current.country||address!==(current.kyc?.address??null);
-			if(current.kycStatus==='APPROVED'&&isProfileLocked(current.verifiedAt)&&personalDataChanged)return {validationError:'PROFILE_LOCKED'} as const;
-			// After a successful personal-details save on an approved account, re-arm the
-			// 2-month lock so the profile stays secure (one edit window every 2 months).
-			// Avatar remains editable anytime via /api/profile/avatar and is not affected.
-			const secureProfileLock=current.kycStatus==='APPROVED'&&personalDataChanged;
-			await tx.user.update({where:{id:user.id},data:{
-				name,
-				country,
-				...(secureProfileLock?{verifiedAt:new Date()}:{}),
-			}});
-			if(input.address!==undefined)await tx.kycProfile.upsert({where:{userId:user.id},update:{address},create:{userId:user.id,address}});
+			const now=new Date();
+			if(isProfileLocked(current.profileDetailsLastEditedAt,now)&&personalDataChanged){
+				return {validationError:'PROFILE_LOCKED',profileEditEligibleAt:profileEditDeadline(current.profileDetailsLastEditedAt)} as const;
+			}
+			if(personalDataChanged){
+				const updatedUser=await tx.user.updateMany({
+					where:{id:user.id,name:current.name,country:current.country,profileDetailsLastEditedAt:current.profileDetailsLastEditedAt},
+					data:{
+						name,
+						country,
+						...(getTierProfileRequirements({name,country,phone}).profileComplete?{profileDetailsLastEditedAt:now}:{}),
+					},
+				});
+				if(updatedUser.count!==1)return {validationError:'PROFILE_CONFLICT'} as const;
+				if(input.address!==undefined)await tx.kycProfile.upsert({where:{userId:user.id},update:{address},create:{userId:user.id,address}});
+				const changedFields=[
+					...(name!==current.name?['name']:[]),
+					...(country!==current.country?['country']:[]),
+					...(address!==(current.kyc?.address??null)?['address']:[]),
+				];
+				await tx.auditLog.create({data:{
+					actorId:user.id,
+					action:'USER_PROFILE_UPDATED',
+					entity:'USER',
+					entityId:user.id,
+					metadata:{
+						changedFields,
+						profileComplete:getTierProfileRequirements({name,country,phone}).profileComplete,
+					},
+				}});
+			}else if(input.address!==undefined){
+				await tx.kycProfile.upsert({where:{userId:user.id},update:{address},create:{userId:user.id,address}});
+			}
 			await synchronizeCompletedProfileTier(tx,user.id);
 			const fresh=await tx.user.findUnique({where:{id:user.id},select:profileSelect});
 			if(!fresh)return null;
 			return fresh;
 		});
 		if(!updated)return NextResponse.json({error:'Profile not found.'},{status:404});
-		if('validationError' in updated&&updated.validationError==='PROFILE_LOCKED')return NextResponse.json({error:'Profile details are locked for 2 months after verification is completed.'},{status:423});
+		if('validationError' in updated&&updated.validationError==='PROFILE_LOCKED')return NextResponse.json({error:`Profile details are locked. You can edit them again on ${updated.profileEditEligibleAt?.toISOString()||'the next eligible date'}.`,profileEditEligibleAt:updated.profileEditEligibleAt},{status:423});
+		if('validationError' in updated&&updated.validationError==='PROFILE_CONFLICT')return NextResponse.json({error:'Your profile changed in another request. Reload your profile before saving again.'},{status:409});
 		if('validationError' in updated&&updated.validationError==='PHONE_VERIFICATION_REQUIRED')return NextResponse.json({error:'Verify a new phone number in Contact verification before saving it to your account.'},{status:409});
 		if('validationError' in updated)return NextResponse.json({error:updated.validationError},{status:400});
 		return NextResponse.json(profileResponse(updated),{headers:{'Cache-Control':'private, no-store'}});

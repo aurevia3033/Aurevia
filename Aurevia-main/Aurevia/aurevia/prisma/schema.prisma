@@ -382,6 +382,7 @@ model User {
   kycDocuments                     KycDocument[]
   emailVerifiedAt                  DateTime?
   verifiedAt                       DateTime?
+  profileDetailsLastEditedAt       DateTime?
   verifiedChannel                  VerificationChannel?
   requiresRegistrationVerification Boolean                           @default(false)
   depositEnabled                   Boolean                           @default(true)

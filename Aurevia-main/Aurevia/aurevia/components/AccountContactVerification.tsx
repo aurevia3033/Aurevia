@@ -107,17 +107,12 @@ export default function AccountContactVerification({country}:{country:string|nul
 		if(emailBusy)return;
 		setEmailBusy(true);setError('');setMessage('');
 		try{
-			const result=await readResult(await fetch('/api/settings/email-verification/send',{
+			await readResult(await fetch('/api/settings/email-verification/send',{
 				method:'POST',headers:{'content-type':'application/json'},body:'{}',
 			}));
 			const current=await refresh();
 			setEmailPending(true);
-			if(typeof result.platformCode==='string'&&result.platformCode){
-				setEmailCode(result.platformCode);
-				setMessage(`Platform verification code ready for ${current.email}. Enter the code below to verify.`);
-			}else{
-				setMessage(`A code was sent to ${current.email}.`);
-			}
+			setMessage(`A code was sent to ${current.email}.`);
 		}catch(exception){setError(exception instanceof Error?exception.message:'Unable to send an email code.')}
 		finally{setEmailBusy(false)}
 	}

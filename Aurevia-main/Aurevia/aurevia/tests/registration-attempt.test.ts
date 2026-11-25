@@ -90,6 +90,7 @@ describe('immediate registration account creation',()=>{
 				gender:'FEMALE',
 				phoneVerified:false,
 				phoneVerifiedAt:null,
+				profileDetailsLastEditedAt:expect.any(Date),
 				twoFactorEnabled:false,
 				status:'ACTIVE',
 			})],

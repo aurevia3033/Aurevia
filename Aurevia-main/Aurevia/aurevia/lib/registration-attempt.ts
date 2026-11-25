@@ -75,6 +75,7 @@ export async function createImmediateRegistration(
 				preferredContactMethod:input.preferredContactMethod,
 				phoneVerified:false,
 				phoneVerifiedAt:null,
+				profileDetailsLastEditedAt:now,
 				twoFactorEnabled:false,
 				role:'USER',
 				accountMode:input.accountMode,

@@ -16,7 +16,7 @@ describe('shared outbound email delivery',()=>{
 			'SMTP_HOST','SMTP_PORT','SMTP_USER','SMTP_PASSWORD','SMTP_FROM',
 			'RESEND_API_KEY','RESEND_FROM_EMAIL','VERIFICATION_EMAIL_FROM',
 		])vi.stubEnv(key,'');
-		vi.stubEnv('EMAIL_PLATFORM_LOCAL','0');
+		vi.stubEnv('EMAIL_PLATFORM_LOCAL','1');
 	});
 
 	afterEach(()=>{
@@ -133,7 +133,7 @@ describe('shared outbound email delivery',()=>{
 			to:'person@example.invalid',
 			subject:'Account security',
 			text:'Test message',
-		})).resolves.toEqual({sent:true,provider:'brevo'});
+		})).resolves.toEqual({sent:true,provider:'smtp'});
 		expect(smtpMocks.createTransport).toHaveBeenCalledWith(expect.objectContaining({
 			host:'smtp-relay.brevo.com',
 			port:587,
@@ -165,7 +165,7 @@ describe('shared outbound email delivery',()=>{
 			text:'Test message',
 		})).resolves.toMatchObject({
 			sent:false,
-			provider:'brevo',
+			provider:'smtp',
 			reason:'provider-rejected',
 			providerCode:'SMTP_AUTHENTICATION_FAILED',
 		});

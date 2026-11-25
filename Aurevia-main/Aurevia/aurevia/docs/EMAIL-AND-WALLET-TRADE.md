@@ -10,20 +10,16 @@ BREVO_API_KEY=
 BREVO_SENDER_EMAIL=
 BREVO_SENDER_NAME=
 
-# or SMTP
+# SMTP fallback
 SMTP_HOST=
 SMTP_PORT=587
 SMTP_USER=
 SMTP_PASSWORD=
 SMTP_FROM=
 VERIFICATION_EMAIL_FROM=
-
-# Free platform inbox (default on). Set to 0 to require real email only.
-EMAIL_PLATFORM_LOCAL=1
 ```
 
-When Brevo/SMTP is configured, codes are emailed normally.  
-When not configured, **platform-local** delivery still issues a code: the API returns `platformCode` and Settings auto-fills it so verification works without a paid mail API.
+Brevo is the primary transactional email provider; configured SMTP is used as a fallback. Without a configured provider, the request fails and no email verification code is issued or returned to the browser. Provider acceptance is not a guarantee that a message reached the recipient's inbox.
 
 ## Wallet funds (DEMO and REAL)
 
@@ -48,7 +44,7 @@ Execution marks use Twelve Data when configured, otherwise free built-in provide
 
 ## Related APIs
 
-- `POST /api/settings/email-verification/send` — may include `platformCode` when local
+- `POST /api/settings/email-verification/send` — sends a code only through a configured email provider
 - `POST /api/settings/email-verification/verify`
 - `POST /api/orders` — spends/credits simulated wallet for the active account mode
 - `GET /api/portfolio` — reflects ledger + positions
