@@ -1,0 +1,380 @@
+/**
+ * Platform-wide visual upgrade layer.
+ * Applies appearance tokens and performance polish to existing sections
+ * without changing any user-facing wording or component structure.
+ *
+ * Sections covered:
+ *  Home, Dashboard, Wallet, Bank, Markets, Trade, Investments,
+ *  Activity, Support / Chat, Testimonials / TV, Admin, Demo & Real
+ */
+
+/* ---------- Shared accent / gain-loss performance ---------- */
+:root {
+	--upgrade-accent: var(--appearance-accent, var(--color-gold, #c5a45f));
+	--upgrade-profit: var(--color-profit, #34d399);
+	--upgrade-loss: var(--color-loss, #f87171);
+	--upgrade-radius: 1rem;
+	--upgrade-surface: var(--color-surface, rgba(16, 27, 22, 0.94));
+	--upgrade-raised: var(--color-surface-raised, rgba(21, 37, 28, 0.96));
+	--upgrade-border: var(--color-border, rgba(198, 211, 198, 0.16));
+	--upgrade-transition: 180ms ease;
+}
+
+html[data-ui-style='rounded'] {
+	--upgrade-radius: 1rem;
+}
+html[data-ui-style='soft'] {
+	--upgrade-radius: 0.65rem;
+}
+html[data-ui-style='crisp'] {
+	--upgrade-radius: 0.35rem;
+}
+
+html[data-accent='forest'] {
+	--upgrade-accent: #1a6b4a;
+}
+html[data-accent='violet'] {
+	--upgrade-accent: #7c5cfc;
+}
+html[data-accent='rose'] {
+	--upgrade-accent: #e85d8a;
+}
+html[data-accent='blue'] {
+	--upgrade-accent: #3b82f6;
+}
+html[data-accent='green'] {
+	--upgrade-accent: #22c55e;
+}
+html[data-accent='amber'] {
+	--upgrade-accent: #f59e0b;
+}
+
+/* ---------- Cards / panels across the product ---------- */
+.card,
+.account-panel,
+.admin-login-card,
+.trade-panel,
+.market-panel,
+.wallet-panel,
+.dashboard-panel,
+.support-panel,
+.bank-panel,
+.investment-panel,
+.activity-panel {
+	border-radius: var(--upgrade-radius);
+	transition: border-color var(--upgrade-transition), box-shadow var(--upgrade-transition),
+		background var(--upgrade-transition);
+}
+
+.card:hover,
+.account-panel:hover {
+	border-color: color-mix(in srgb, var(--upgrade-accent) 28%, var(--upgrade-border));
+}
+
+/* Primary actions pick up accent */
+.btn.bg-gold,
+.btn.admin-login-button,
+button.bg-gold {
+	background: var(--upgrade-accent) !important;
+	color: #0b1220 !important;
+}
+
+/* ---------- Home ---------- */
+.home-hero,
+.home-section,
+[data-section='home'] {
+	--section-accent: var(--upgrade-accent);
+}
+
+/* ---------- Dashboard ---------- */
+.user-dashboard,
+.dashboard-shell,
+[data-section='dashboard'] .card {
+	border-radius: var(--upgrade-radius);
+}
+
+.user-dashboard .profit,
+.dashboard-shell .text-profit,
+.gain {
+	color: var(--upgrade-profit);
+}
+.user-dashboard .loss,
+.dashboard-shell .text-loss,
+.loss {
+	color: var(--upgrade-loss);
+}
+
+/* ---------- Wallet ---------- */
+.wallet-experience,
+[data-section='wallet'] {
+	--wallet-accent: var(--upgrade-accent);
+}
+
+.wallet-experience .card,
+.wallet-panel {
+	border-radius: var(--upgrade-radius);
+}
+
+/* ---------- Bank ---------- */
+.bank-page,
+.bank-panel,
+[data-section='bank'] .card {
+	border-radius: var(--upgrade-radius);
+}
+
+/* ---------- Markets + livestream movement ---------- */
+.live-market-dashboard,
+.market-dashboard,
+[data-section='markets'] {
+	--market-accent: var(--upgrade-accent);
+}
+
+.live-market-dashboard .sparkline-up,
+.market-tick-up,
+.quote-up {
+	color: var(--upgrade-profit);
+}
+.live-market-dashboard .sparkline-down,
+.market-tick-down,
+.quote-down {
+	color: var(--upgrade-loss);
+}
+
+/* Subtle pulse for live quote updates */
+@keyframes market-live-pulse {
+	0% {
+		box-shadow: 0 0 0 0 color-mix(in srgb, var(--upgrade-accent) 35%, transparent);
+	}
+	70% {
+		box-shadow: 0 0 0 8px transparent;
+	}
+	100% {
+		box-shadow: 0 0 0 0 transparent;
+	}
+}
+
+.market-quote-live,
+.live-quote-chip,
+[data-live='true'] {
+	animation: market-live-pulse 1.6s ease-out;
+}
+
+/* ---------- Trade ---------- */
+.trade-workspace,
+.trade-scene,
+[data-section='trade'] {
+	--trade-accent: var(--upgrade-accent);
+}
+
+.trade-workspace .card,
+.trade-panel {
+	border-radius: var(--upgrade-radius);
+}
+
+.trade-buy,
+.order-side-buy {
+	color: var(--upgrade-profit);
+}
+.trade-sell,
+.order-side-sell {
+	color: var(--upgrade-loss);
+}
+
+/* ---------- Investments ---------- */
+.investment-experience,
+[data-section='investments'] .card {
+	border-radius: var(--upgrade-radius);
+}
+
+/* ---------- Account activity ---------- */
+.account-activity,
+.activity-experience,
+[data-section='activity'] .card {
+	border-radius: var(--upgrade-radius);
+}
+
+/* ---------- Support / Chat / Complaint ---------- */
+.support-experience,
+.floating-support-chat,
+[data-section='support'] {
+	--support-accent: var(--upgrade-accent);
+}
+
+.floating-support-chat .support-fab,
+.support-chat-toggle {
+	background: var(--upgrade-accent) !important;
+	color: #0b1220 !important;
+	border-radius: 999px;
+	box-shadow: 0 8px 24px color-mix(in srgb, var(--upgrade-accent) 35%, transparent);
+}
+
+/* ---------- TV / Testimonials ---------- */
+.news-tv-testimonials,
+.client-stories,
+[data-section='testimonials'] {
+	--tv-accent: var(--upgrade-accent);
+}
+
+.news-tv-testimonials .card,
+.client-story-card {
+	border-radius: var(--upgrade-radius);
+}
+
+/* ---------- Demo & Real ---------- */
+.demo-account-controls,
+[data-account-mode='DEMO'],
+[data-account-mode='REAL'] {
+	--mode-accent: var(--upgrade-accent);
+}
+
+.demo-account-controls .btn,
+.account-mode-switch {
+	border-radius: var(--upgrade-radius);
+}
+
+[data-account-mode='DEMO'] .mode-badge {
+	background: color-mix(in srgb, #f59e0b 22%, transparent);
+	color: #fbbf24;
+}
+[data-account-mode='REAL'] .mode-badge {
+	background: color-mix(in srgb, var(--upgrade-profit) 22%, transparent);
+	color: var(--upgrade-profit);
+}
+
+/* ---------- Admin (entire control center) ---------- */
+.admin-shell,
+.admin-dashboard,
+.admin-nav,
+.admin-login-scene {
+	--admin-accent: var(--upgrade-accent);
+}
+
+.admin-login-card {
+	border-radius: calc(var(--upgrade-radius) + 0.15rem);
+	backdrop-filter: blur(12px);
+}
+
+.admin-login-button {
+	border-radius: var(--upgrade-radius) !important;
+	transition: transform var(--upgrade-transition), filter var(--upgrade-transition);
+}
+.admin-login-button:hover:not(:disabled) {
+	filter: brightness(1.06);
+	transform: translateY(-1px);
+}
+
+.admin-nav a.active,
+.admin-nav [aria-current='page'] {
+	color: var(--upgrade-accent);
+	border-color: color-mix(in srgb, var(--upgrade-accent) 40%, transparent);
+}
+
+/* ---------- Settings / Preferences ---------- */
+.mobile-settings-page,
+.appearance-settings {
+	--settings-accent: var(--upgrade-accent);
+}
+
+/* ---------- Reduced motion ---------- */
+@media (prefers-reduced-motion: reduce) {
+	.market-quote-live,
+	.live-quote-chip,
+	[data-live='true'] {
+		animation: none;
+	}
+	.card,
+	.account-panel,
+	.admin-login-button {
+		transition: none;
+	}
+}
+
+/* Portfolio extras */
+.portfolio-extras {
+	margin: 1.25rem 0;
+	padding: 1.15rem 1.1rem 1.25rem;
+}
+.portfolio-extras-head {
+	display: flex;
+	flex-wrap: wrap;
+	align-items: flex-start;
+	justify-content: space-between;
+	gap: 0.75rem;
+	margin-bottom: 1rem;
+}
+.portfolio-extras-head h2 {
+	margin: 0.15rem 0 0;
+	font-size: 1.15rem;
+	font-weight: 650;
+}
+.portfolio-extras-actions {
+	display: flex;
+	flex-wrap: wrap;
+	gap: 0.45rem;
+}
+.portfolio-extras-actions .btn {
+	display: inline-flex;
+	align-items: center;
+	gap: 0.4rem;
+	min-height: 44px;
+}
+.portfolio-extras-grid {
+	display: grid;
+	grid-template-columns: repeat(auto-fit, minmax(160px, 1fr));
+	gap: 0.75rem;
+	margin-bottom: 1rem;
+}
+.portfolio-extra-metric {
+	display: flex;
+	gap: 0.65rem;
+	padding: 0.75rem;
+	border-radius: var(--upgrade-radius, 0.9rem);
+	background: color-mix(in srgb, currentColor 5%, transparent);
+}
+.portfolio-extra-icon {
+	display: inline-flex;
+	align-items: center;
+	justify-content: center;
+	width: 2.1rem;
+	height: 2.1rem;
+	border-radius: 0.65rem;
+	background: color-mix(in srgb, var(--upgrade-accent, var(--color-gold)) 18%, transparent);
+	flex-shrink: 0;
+}
+.portfolio-extra-value {
+	margin: 0.15rem 0;
+	font-size: 1.15rem;
+	font-weight: 700;
+}
+.portfolio-extras-alloc {
+	list-style: none;
+	margin: 0;
+	padding: 0;
+	display: flex;
+	flex-direction: column;
+	gap: 0.45rem;
+}
+.portfolio-extras-alloc li {
+	display: grid;
+	grid-template-columns: 6.5rem 1fr 3.5rem;
+	gap: 0.5rem;
+	align-items: center;
+	font-size: 0.88rem;
+}
+.portfolio-extras-bar {
+	height: 0.45rem;
+	border-radius: 999px;
+	background: color-mix(in srgb, currentColor 10%, transparent);
+	overflow: hidden;
+}
+.portfolio-extras-bar > span {
+	display: block;
+	height: 100%;
+	background: var(--upgrade-accent, var(--color-gold));
+	border-radius: inherit;
+}
+@media (max-width: 640px) {
+	.portfolio-extras-alloc li {
+		grid-template-columns: 5rem 1fr 3rem;
+	}
+}

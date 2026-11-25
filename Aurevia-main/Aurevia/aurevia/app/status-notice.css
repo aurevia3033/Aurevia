@@ -1,0 +1,13 @@
+.status-notice{--status-notice-color:var(--theme-info);display:flex;align-items:flex-start;gap:12px;margin-top:16px;border:1px solid color-mix(in srgb,var(--status-notice-color) 38%,var(--theme-border));border-radius:13px;padding:14px;background:color-mix(in srgb,var(--status-notice-color) 7%,var(--theme-surface));color:var(--theme-text)}
+.status-notice--success{--status-notice-color:var(--theme-positive)}
+.status-notice--declined{--status-notice-color:var(--theme-negative)}
+.status-notice--pending{--status-notice-color:var(--theme-warning)}
+.status-notice--attention{--status-notice-color:var(--theme-accent)}
+.status-notice-icon{flex:none;margin-top:1px;color:var(--status-notice-color)}
+.status-notice-icon.is-processing{animation:statusNoticeSpin 1.4s linear infinite}
+.status-notice>div{min-width:0;flex:1}
+.status-notice h3{margin:0;color:var(--status-notice-color);font-size:14px;font-weight:700;line-height:1.45}
+.status-notice p{margin:4px 0 0;color:var(--theme-text-secondary);font-size:12px;line-height:1.55}
+.status-notice-emoji{flex:none;margin-left:auto;font-size:23px;line-height:1.2}
+@keyframes statusNoticeSpin{to{transform:rotate(360deg)}}
+@media(prefers-reduced-motion:reduce){.status-notice-icon.is-processing{animation:none}}

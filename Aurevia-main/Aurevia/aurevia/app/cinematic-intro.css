@@ -1,0 +1,135 @@
+html[data-aurevia-intro-pending=true],
+html[data-aurevia-intro-pending=true] body{overflow:hidden}
+html[data-aurevia-intro-pending=true] .scene-content>div:first-child{visibility:hidden}
+.exchange-intro{
+	position:fixed;
+	z-index:10000;
+	inset:0;
+	display:grid;
+	place-items:center;
+	overflow:hidden;
+	background:
+		radial-gradient(ellipse at 50% 42%,rgba(28,78,56,.48),transparent 44%),
+		linear-gradient(155deg,#030806,#08140e 54%,#040906);
+	color:#f2eee2;
+	isolation:isolate;
+	opacity:1;
+	visibility:visible;
+	transition:opacity .45s ease,visibility .45s ease;
+}
+.exchange-intro.is-exiting{opacity:0;visibility:hidden;pointer-events:none}
+.exchange-intro-glow{
+	position:absolute;
+	inset:-25%;
+	z-index:-1;
+	background:radial-gradient(ellipse at center,rgba(197,164,107,.1),transparent 48%);
+	pointer-events:none;
+}
+.exchange-intro-poster{
+	position:absolute;
+	width:min(38vw,320px);
+	height:min(38vw,320px);
+	object-fit:contain;
+	opacity:.13;
+	pointer-events:none;
+}
+.exchange-intro-video{
+	position:absolute;
+	inset:0;
+	width:100%;
+	height:100%;
+	object-fit:contain;
+	background:transparent;
+}
+.exchange-intro-loader{
+	position:absolute;
+	top:50%;
+	left:50%;
+	z-index:1;
+	display:grid;
+	justify-items:center;
+	gap:10px;
+	color:#ddc990;
+	font-size:11px;
+	letter-spacing:.08em;
+	transform:translate(-50%,-50%);
+	pointer-events:none;
+}
+.exchange-intro-loader svg{filter:drop-shadow(0 0 12px rgba(221,201,144,.34))}
+.exchange-intro-brand{
+	position:absolute;
+	bottom:max(32px,calc(env(safe-area-inset-bottom) + 22px));
+	display:grid;
+	gap:5px;
+	color:#f0eadb;
+	text-align:center;
+	pointer-events:none;
+}
+.exchange-intro-brand span{font-size:clamp(12px,1.8vw,16px);font-weight:650;letter-spacing:.28em}
+.exchange-intro-brand small{color:#d5b875;font-size:9px;letter-spacing:.36em}
+.exchange-intro-skip{
+	position:absolute;
+	top:max(18px,calc(env(safe-area-inset-top) + 10px));
+	right:max(18px,calc(env(safe-area-inset-right) + 10px));
+	z-index:2;
+	min-height:44px;
+	padding:0 16px;
+	border:1px solid rgba(214,191,137,.38);
+	border-radius:4px;
+	background:rgba(5,11,7,.72);
+	color:#f2ead8;
+	font-size:12px;
+	letter-spacing:.04em;
+	cursor:pointer;
+}
+.exchange-intro-skip:hover,.exchange-intro-actions button:hover,.exchange-intro-replay:hover{border-color:rgba(228,202,145,.76);background:rgba(197,164,95,.16);color:#fff}
+.exchange-intro-actions{
+	position:absolute;
+	top:50%;
+	left:50%;
+	z-index:2;
+	display:grid;
+	justify-items:center;
+	gap:12px;
+	width:min(420px,calc(100vw - 40px));
+	padding:18px;
+	border:1px solid rgba(214,191,137,.25);
+	background:rgba(5,11,7,.82);
+	text-align:center;
+	transform:translate(-50%,-50%);
+}
+.exchange-intro-actions p{margin:0;color:#e4e6dc;font-size:13px;line-height:1.55}
+.exchange-intro-action-buttons{display:flex;flex-wrap:wrap;justify-content:center;gap:8px}
+.exchange-intro-actions button,.exchange-intro-replay{
+	min-height:44px;
+	padding:0 16px;
+	border:1px solid rgba(214,191,137,.38);
+	border-radius:4px;
+	background:linear-gradient(110deg,#c5a46b,#dbc18f);
+	color:#11160f;
+	font-size:12px;
+	font-weight:650;
+	cursor:pointer;
+}
+.exchange-intro-actions button.is-secondary{
+	border-color:rgba(214,191,137,.38);
+	background:rgba(5,11,7,.72);
+	color:#f2ead8;
+}
+.exchange-intro-replay{
+	position:fixed;
+	z-index:80;
+	bottom:max(18px,calc(env(safe-area-inset-bottom) + 10px));
+	left:max(18px,calc(env(safe-area-inset-left) + 10px));
+	background:rgba(5,11,7,.88);
+}
+.exchange-intro :is(button):focus-visible{outline:2px solid #e8cf92;outline-offset:3px}
+@media(max-width:600px){
+	.exchange-intro-poster{width:min(58vw,280px);height:min(58vw,280px)}
+	.exchange-intro-brand{bottom:max(28px,calc(env(safe-area-inset-bottom) + 18px))}
+	.exchange-intro-skip{top:max(12px,calc(env(safe-area-inset-top) + 8px));right:max(12px,calc(env(safe-area-inset-right) + 8px))}
+	.exchange-intro-replay{bottom:max(12px,calc(env(safe-area-inset-bottom) + 8px));left:max(12px,calc(env(safe-area-inset-left) + 8px))}
+}
+@media(prefers-reduced-motion:reduce){
+	.exchange-intro,.exchange-intro *{transition:none!important;animation:none!important}
+}

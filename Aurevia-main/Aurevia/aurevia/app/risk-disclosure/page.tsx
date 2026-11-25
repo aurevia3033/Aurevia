@@ -1,0 +1,10 @@
+import InfoPage from '@/components/InfoPage';
+
+export default function RiskDisclosure(){
+  return <InfoPage eyebrow="Important information" title="Risk disclosure" lead="Understand the limits of this demo and the risks associated with investing and trading." updated="October 27, 2026" sections={[
+    {title:'Investment risk',content:<p>Investing and trading involve risk. The value of investments can rise or fall, and you may lose some or all of the capital you invest. Leverage can magnify both gains and losses. Consider whether a product is appropriate for your circumstances and seek independent advice where needed.</p>},
+    {title:'Market data and execution',content:<p>Market data may come from internal simulated prices or external providers as identified in the interface; neither source guarantees an executable price. DEMO orders are for practice only. REAL-mode orders are funded from the Aurevia Wallet and simulated internally by Aurevia. They are not sent to an external stock or cryptocurrency exchange and do not represent live market execution.</p>},
+    {title:'Wallet balances and order records',content:<p>Aurevia wallet balances, deposits, and withdrawals are records in the platform's internal ledger and may be subject to review. They do not represent money held in custody or confirmation that an external payment occurred. REAL-mode trade debits and credits are internal ledger entries for simulated orders, not external money movement. Historical external-provider order records are retained for recordkeeping and are not used to route new REAL orders.</p>},
+    {title:'Information, not advice',content:<p>Platform content is general information for product exploration and education. It is not personalized investment, legal, tax, or financial advice, and it is not an offer or recommendation to buy or sell an instrument.</p>},
+  ]}/>;
+}

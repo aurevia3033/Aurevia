@@ -1,0 +1,17 @@
+import InfoPage from '@/components/InfoPage';
+import {getCurrentPrivacyPolicy} from '@/lib/managed-notice-policy';
+
+export const dynamic='force-dynamic';
+
+export default async function Privacy(){
+  const managedPolicy=await getCurrentPrivacyPolicy();
+  if(managedPolicy?.version)return <InfoPage eyebrow={`Privacy Policy · Version ${managedPolicy.version}`} title={managedPolicy.title} lead="Current published Privacy Policy." updated={managedPolicy.publishedAt?.toLocaleDateString()||managedPolicy.updatedAt.toLocaleDateString()} importantNote="" sections={[
+    {title:'Privacy Policy',content:<p className="managed-policy-copy">{managedPolicy.content}</p>},
+  ]}/>;
+  return <InfoPage eyebrow="Your information" title="Privacy overview" lead="A plain-language summary of information handled by the current Aurevia Exchange application." updated="October 27, 2026" importantNote="Identity documents are stored in the configured private storage service and made available through authorized, short-lived links. Review the privacy and retention terms for your deployment before submitting real identity information." sections={[
+    {title:'Information entered',content:<p>Account registration and profile forms can collect a name, email address, country, and phone number; passwords are stored as hashes. REAL-mode identity verification collects the legal name, date of birth, issuing country, document expiry date when applicable, document images, and a selfie. Identity details are encrypted by the application before database storage. Evidence files are held in a private storage bucket and reviewed by authorized Aurevia administrators. Avoid submitting personal identity details in an evaluation or test deployment.</p>},
+    {title:'How information is used',content:<p>Information is used by the application to authenticate users, display account details, associate ledger and trading records with an account, and allow administrators to review supported verification and funding requests.</p>},
+    {title:'Storage and service providers',content:<p>Account, encrypted identity details, and activity records are stored in the configured application database. Identity and proof-of-address files use the existing private object-storage bucket; administrator evidence access is authorized and delivered through short-lived links. Approved or rejected case evidence is retained for 90 days after the decision before scheduled purge, subject to legal holds and retry behavior; open cases are not automatically purged. REAL-mode orders are simulated internally and are not sent to an external exchange. Historical provider-linked order records remain stored as records and are not remotely reconciled. These implementation details do not define a deployment's full retention schedule, backups, legal bases, or data-processing terms.</p>},
+    {title:'Questions and formal policy',content:<p>This page is a product summary, not a jurisdiction-specific legal privacy notice. Before collecting real customer information, the operator should publish a reviewed policy naming its operating entity and contact channel and explaining retention, legal bases, applicable user rights, and the service providers used in that deployment.</p>},
+  ]}/>;
+}

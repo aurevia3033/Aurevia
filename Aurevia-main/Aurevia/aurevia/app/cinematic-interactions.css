@@ -1,0 +1,38 @@
+/* Immersive, scroll-led interaction layer inspired by the supplied mobile showcase. */
+:root{--aurevia-scroll-progress:0}
+.aurevia-scroll-progress{position:fixed;z-index:9999;top:0;left:0;width:100%;height:2px;pointer-events:none;background:linear-gradient(90deg,var(--color-gold),#e7d5a4);transform:scaleX(var(--aurevia-scroll-progress));transform-origin:left center;opacity:.8}
+html.aurevia-motion-enabled [data-aurevia-reveal="pending"]{opacity:0;transform:translate3d(0,26px,0) scale(.992);filter:blur(2px);transition:opacity .72s cubic-bezier(.2,.72,.2,1),transform .78s cubic-bezier(.2,.72,.2,1),filter .72s ease;will-change:opacity,transform,filter}
+html.aurevia-motion-enabled [data-aurevia-reveal="visible"]{opacity:1;transform:translate3d(0,0,0) scale(1);filter:blur(0)}
+html.aurevia-motion-enabled .account-page > :nth-child(2)[data-aurevia-reveal],html.aurevia-motion-enabled .account-page .admin-panel:nth-of-type(2)[data-aurevia-reveal]{transition-delay:65ms}
+html.aurevia-motion-enabled .account-page > :nth-child(3)[data-aurevia-reveal],html.aurevia-motion-enabled .account-page .admin-panel:nth-of-type(3)[data-aurevia-reveal]{transition-delay:120ms}
+html.aurevia-motion-enabled .account-page > :nth-child(4)[data-aurevia-reveal]{transition-delay:175ms}
+@media(hover:hover) and (pointer:fine){
+ .account-page .admin-panel,.account-page .account-panel,.account-page > .card{transition:transform .28s cubic-bezier(.2,.7,.2,1),border-color .28s ease,box-shadow .28s ease}
+ .account-page .admin-panel:hover,.account-page .account-panel:hover,.account-page > .card:hover{transform:translateY(-2px);border-color:color-mix(in srgb,var(--color-gold) 28%,var(--color-border));box-shadow:0 20px 48px rgba(0,0,0,.22)}
+}
+@media(max-width:640px){
+ html.aurevia-motion-enabled [data-aurevia-reveal="pending"]{transform:translate3d(0,16px,0);filter:none;transition-duration:.48s}
+ .aurevia-scroll-progress{height:2px}
+}
+@media(prefers-reduced-motion:reduce){
+ .aurevia-scroll-progress{display:none}
+ html.aurevia-motion-enabled [data-aurevia-reveal="pending"],html.aurevia-motion-enabled [data-aurevia-reveal="visible"]{opacity:1;transform:none;filter:none;transition:none;will-change:auto}
+}
+
+
+/* Platform-wide route choreography: one consistent motion language on every page. */
+.scene-content[data-aurevia-route-enter="true"]{opacity:.94;transform:translate3d(0,7px,0);filter:blur(1px)}
+.scene-content[data-aurevia-route-enter="active"]{opacity:1;transform:translate3d(0,0,0);filter:blur(0);transition:opacity .42s cubic-bezier(.2,.72,.2,1),transform .52s cubic-bezier(.2,.72,.2,1),filter .42s ease}
+html.aurevia-motion-enabled .scene-content main > section[data-aurevia-reveal="pending"],
+html.aurevia-motion-enabled .scene-content main > article[data-aurevia-reveal="pending"],
+html.aurevia-motion-enabled .scene-content main > [data-aurevia-motion][data-aurevia-reveal="pending"],
+html.aurevia-motion-enabled .scene-content [data-page-section][data-aurevia-reveal="pending"],
+html.aurevia-motion-enabled .scene-content .page-motion-section[data-aurevia-reveal="pending"]{opacity:0;transform:translate3d(0,22px,0) scale(.995);filter:blur(1px)}
+html.aurevia-motion-enabled .scene-content main > section[data-aurevia-reveal="visible"],
+html.aurevia-motion-enabled .scene-content main > article[data-aurevia-reveal="visible"],
+html.aurevia-motion-enabled .scene-content main > [data-aurevia-motion][data-aurevia-reveal="visible"],
+html.aurevia-motion-enabled .scene-content [data-page-section][data-aurevia-reveal="visible"],
+html.aurevia-motion-enabled .scene-content .page-motion-section[data-aurevia-reveal="visible"]{opacity:1;transform:none;filter:none}
+@media(prefers-reduced-motion:reduce){
+ .scene-content[data-aurevia-route-enter],.scene-content[data-aurevia-route-enter] *{animation:none!important;transition:none!important}
+}
