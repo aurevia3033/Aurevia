@@ -252,7 +252,7 @@ export default function UserDashboardExperience(){
 		try{await Promise.all([load(false),refreshQuotesRef.current()])}
 		finally{setSyncingAll(false)}
 	},[load]);
-	if(!overview)return <><Nav/><main className="user-dashboard-page">
+	if(!overview)return <><Nav/><main className={`user-dashboard-page ${loading?'user-dashboard-page--loading':''}`} aria-busy={loading}>
 		{loading
 			?<AureviaLoading variant="inline" label="Loading your account dashboard" className="user-dashboard-loading"/>
 			:<div className="user-dashboard-load-error" role="alert"><p>{error||'Your dashboard could not be loaded.'}</p><button type="button" onClick={()=>void load(true)}>Retry dashboard</button></div>}

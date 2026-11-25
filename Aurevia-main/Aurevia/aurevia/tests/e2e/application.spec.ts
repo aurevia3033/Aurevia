@@ -1021,6 +1021,34 @@ test('opening the dashboard from the wallet avoids loading its chart before over
 	expect(chartRequestedBeforeOverview).toBe(false);
 });
 
+test('dashboard loading surface follows the active theme on mobile',async({page})=>{
+	await loginAs(page,fixture('USER_EMAIL'),fixture('USER_PASSWORD'));
+	await page.setViewportSize({width:390,height:844});
+	let releaseOverview!:()=>void;
+	const overviewGate=new Promise<void>(resolve=>{releaseOverview=resolve});
+	await page.route('**/api/dashboard/overview',async route=>{
+		await overviewGate;
+		await route.continue();
+	});
+
+	try{
+		await page.goto('/dashboard');
+		const loadingPage=page.locator('main.user-dashboard-page--loading');
+		await expect(loadingPage).toBeVisible();
+		const colors=await loadingPage.evaluate(element=>{
+			document.documentElement.dataset.themeName='forest-green';
+			return {
+				background:getComputedStyle(element).backgroundColor,
+				body:getComputedStyle(document.body).backgroundColor,
+			};
+		});
+		expect(colors.background).toBe(colors.body);
+		expect(colors.background).not.toBe('rgb(249, 251, 253)');
+	}finally{
+		releaseOverview();
+	}
+});
+
 test('authenticated bottom navigation stays fixed across viewports and More destinations',async({page})=>{
 	await loginAs(page,fixture('USER_EMAIL'),fixture('USER_PASSWORD'));
 	const navigation=page.getByRole('navigation',{name:'Primary account navigation'});
@@ -1081,6 +1109,19 @@ test('authenticated bottom navigation stays fixed across viewports and More dest
 	for(const label of ['Markets','Trade','Portfolio','Orders','Wallet','Account activity']){
 		await expect(demoMoreMenu.getByRole('link',{name:label})).toBeVisible();
 	}
+});
+
+test('mobile account menu follows the forest green theme',async({page})=>{
+	await loginAs(page,fixture('USER_EMAIL'),fixture('USER_PASSWORD'));
+	const response=await page.request.patch('/api/theme-preference',{data:{theme:'forest-green'}});
+	expect(response.ok()).toBeTruthy();
+	await page.setViewportSize({width:390,height:844});
+	await page.goto('/dashboard');
+	await expect(page.locator('html')).toHaveAttribute('data-theme-name','forest-green');
+	await page.getByRole('navigation',{name:'Primary account navigation'}).getByRole('button',{name:'More navigation'}).click();
+	const menu=page.getByRole('dialog',{name:'More'});
+	await expect(menu).toHaveCSS('background-color','rgb(16, 27, 21)');
+	await expect(menu.locator('.user-more-group a').first()).toHaveCSS('background-color','rgb(18, 32, 25)');
 });
 
 test('authenticated home market uses REAL provider candles and keeps account navigation off the homepage',async({page})=>{
