@@ -7,6 +7,7 @@ import { useLocale } from "@/lib/i18n-context";
 import {TIMEFRAMES,getMarketAssetForTradingSymbol,isExternalMarketDataSource,type MarketQuote,type TimeframeId} from "@/lib/live-market";
 import {normalizeDemoTradeCandles} from "@/lib/demo-trade-chart";
 import {createQuoteOnlyCandle} from "@/lib/chart-candles";
+import {marketHistoryCacheKey,readMarketHistoryCache,writeMarketHistoryCache,type MarketHistoryResponse} from "@/lib/market-history-cache";
 import {MINIMUM_ORDER_NOTIONAL_USD} from "@/lib/trade-constants";
 import { useTradingStore } from "@/lib/store";
 import { io, type Socket } from "socket.io-client";
@@ -146,6 +147,10 @@ export default function Trade() {
   const [chartLoading,setChartLoading]=useState(false);
   const [chartError,setChartError]=useState("");
   const [chartQuoteOnly,setChartQuoteOnly]=useState(false);
+  const [savedChartHistory,setSavedChartHistory]=useState<MarketHistoryResponse|null>(null);
+  const [savedHistoryAnalysis,setSavedHistoryAnalysis]=useState<{summary:string;caveat:string;provider:string;model:string}|null>(null);
+  const [savedHistoryAnalysisError,setSavedHistoryAnalysisError]=useState("");
+  const [savedHistoryAnalysisLoading,setSavedHistoryAnalysisLoading]=useState(false);
   const providerHistoryLoaded=useRef(false);
   const currentLiveQuote=useRef<MarketQuote|undefined>(undefined);
   const currentChartPrice=useRef<number|undefined>(undefined);
@@ -345,6 +350,9 @@ export default function Trade() {
     setLiveCandles([]);
     setChartSource(undefined);
     setChartQuoteOnly(false);
+    setSavedChartHistory(null);
+    setSavedHistoryAnalysis(null);
+    setSavedHistoryAnalysisError("");
     providerHistoryLoaded.current=false;
     const loadHistory=async()=>{
       setChartLoading(true);
@@ -372,15 +380,34 @@ export default function Trade() {
           const external=!!providerHistory.source&&isExternalMarketDataSource(providerHistory.source);
           if(!providerHistory.source||!external||!Array.isArray(providerHistory.candles)||!providerHistory.candles.length)throw new Error("Market chart data is unavailable.");
           history={candles:providerHistory.candles,source:providerHistory.source};
+          writeMarketHistoryCache(window.localStorage,marketHistoryCacheKey(chartAssetId,chartTimeframe),{
+            quote:null,candles:providerHistory.candles,timeframe:chartTimeframe,
+            interval,source:providerHistory.source,
+          });
         }
         if(active){
           providerHistoryLoaded.current=true;
+          setSavedChartHistory(null);
           setLiveCandles(history.candles);
           setChartSource(history.source);
           setChartQuoteOnly(false);
         }
       }catch(error){
         if(active){
+          const cached=chartAssetId
+            ?readMarketHistoryCache(window.localStorage,marketHistoryCacheKey(chartAssetId,chartTimeframe))
+            :undefined;
+          if(cached?.isCached&&cached.cachedAt&&isExternalMarketDataSource(cached.source)&&cached.candles.length){
+            providerHistoryLoaded.current=true;
+            setSavedChartHistory(cached);
+            setSavedHistoryAnalysis(null);
+            setSavedHistoryAnalysisError("");
+            setLiveCandles(cached.candles);
+            setChartSource(cached.source);
+            setChartQuoteOnly(false);
+            setChartError("");
+            return;
+          }
           const quote=currentLiveQuote.current;
           const quoteAge=quote?Date.now()-Date.parse(quote.updatedAt):Infinity;
           const quoteIsFresh=accountMode==="REAL"&&!!quote&&isExternalMarketDataSource(quote.source)&&
@@ -452,6 +479,32 @@ export default function Trade() {
   const failedOrders=orders.filter(isFailedOrder);
   const visibleFailedOrders=failedOrders.filter(order=>!hiddenFailedOrderIds.has(order.id));
   const visibleOrderHistory=orders.filter(order=>!hiddenFailedOrderIds.has(order.id));
+
+  async function analyzeSavedHistory(){
+    if(!savedChartHistory||!chartAssetId||!savedChartHistory.cachedAt||savedHistoryAnalysisLoading)return;
+    setSavedHistoryAnalysisLoading(true);
+    setSavedHistoryAnalysisError("");
+    try{
+      const response=await fetch("/api/market/history-analysis",{
+        method:"POST",
+        headers:{"content-type":"application/json"},
+        body:JSON.stringify({
+          symbol:chartAssetId,
+          timeframe:chartTimeframe,
+          source:savedChartHistory.source,
+          cachedAt:savedChartHistory.cachedAt,
+          candles:savedChartHistory.candles.slice(-80),
+        }),
+      });
+      const result=await response.json() as {analysis?:{summary:string;caveat:string};provider?:string;model?:string;error?:string};
+      if(!response.ok||!result.analysis)throw new Error(result.error||"Saved history analysis is unavailable.");
+      setSavedHistoryAnalysis({...result.analysis,provider:result.provider||"AI provider",model:result.model||"configured model"});
+    }catch(error){
+      setSavedHistoryAnalysisError(error instanceof Error?error.message:"Saved history analysis is unavailable.");
+    }finally{
+      setSavedHistoryAnalysisLoading(false);
+    }
+  }
 
   function clearFailedOrders(){
     const failedIds=visibleFailedOrders.map(order=>order.id);
@@ -610,6 +663,21 @@ export default function Trade() {
                   {chartAssetId||accountMode==="DEMO"&&selected?
                     <LivePriceChart candles={liveCandles} quote={(accountMode==="REAL"?cur?.liveQuote:demoChartQuote)||undefined} timeframe={chartTimeframe} source={chartSource} loading={chartLoading} error={dismissedChartError?'':chartError} allowSimulatedHistory={accountMode==="DEMO"} quoteOnly={chartQuoteOnly}/>
                     :<div className="trade-chart-unavailable" role="status"><span>{chartError||"Provider market data is unavailable for this instrument."}</span></div>}
+                  {savedChartHistory?.cachedAt&&<section className="account-callout mt-3" aria-label="Saved market history">
+                    <div className="min-w-0 flex-1">
+                      <p><b>Saved {savedChartHistory.source} history</b> · cached {new Date(savedChartHistory.cachedAt).toLocaleString()}</p>
+                      <p className="mt-1 text-xs muted">The chart uses previously received history saved in this browser. It has not been revalidated and is not used to price or execute orders.</p>
+                      {savedHistoryAnalysis&&<div className="mt-3 border-t border-white/10 pt-3" role="status">
+                        <p className="text-sm">{savedHistoryAnalysis.summary}</p>
+                        <p className="mt-1 text-xs muted">{savedHistoryAnalysis.caveat} AI output is informational only, not market data or investment advice.</p>
+                        <p className="mt-1 text-xs muted">Generated with {savedHistoryAnalysis.provider} · {savedHistoryAnalysis.model}</p>
+                      </div>}
+                      {savedHistoryAnalysisError&&<p className="mt-2 text-sm text-loss" role="alert">{savedHistoryAnalysisError}</p>}
+                    </div>
+                    <button type="button" className="btn min-h-10 bg-white/5" onClick={()=>void analyzeSavedHistory()} disabled={savedHistoryAnalysisLoading}>
+                      {savedHistoryAnalysisLoading?"Analyzing…":"Analyze saved history with AI"}
+                    </button>
+                  </section>}
                 </div>
               </div>
               <div className="trade-orderbook">
