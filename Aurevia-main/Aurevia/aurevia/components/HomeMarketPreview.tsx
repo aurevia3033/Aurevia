@@ -35,7 +35,7 @@ export default function HomeMarketPreview(){
 	},[currentPrice,currentId]);
 
 	useEffect(()=>{
-		if(markets.length)setSelected(value=>value||markets.find(item=>item.symbol==='BTC')?.id||markets[0]?.id||'');
+		if(markets.length)setSelected(value=>markets.some(item=>item.id===value)?value:markets.find(item=>item.id==='BTC')?.id||markets[0].id);
 	},[markets]);
 
 	useEffect(()=>{
@@ -47,6 +47,10 @@ export default function HomeMarketPreview(){
 
 	useEffect(()=>{
 		if(!currentId){
+			setHistory(null);setHistoryError('');setHistoryLoading(false);
+			return;
+		}
+		if(marketDataStatus==='INTERNAL'){
 			setHistory(null);setHistoryError('');setHistoryLoading(false);
 			return;
 		}
@@ -63,13 +67,13 @@ export default function HomeMarketPreview(){
 			.catch(error=>{if(active)setHistoryError(error instanceof Error?error.message:'Provider chart history is unavailable.')})
 			.finally(()=>{if(active)setHistoryLoading(false)});
 		return()=>{active=false};
-	},[currentId,timeframe,historyRetry]);
+	},[currentId,timeframe,historyRetry,marketDataStatus]);
 
 	const currentHistory=history?.symbol===currentId?history:null;
 	const changePct=current?.change;
 	const changeClass=changePct===undefined?'':changePct>=0?'is-up':'is-down';
 	const ageLabel=updatedAt!==null?`${Math.max(0,Math.round((now-updatedAt)/1000))}s`:'—';
-	const sourceStatus=marketDataStatus==='LIVE'?'LIVE':marketDataStatus==='PARTIAL'?'PARTIAL':marketDataStatus==='INTERNAL'?'REFERENCE':'UNAVAILABLE';
+	const sourceStatus=marketDataStatus==='LIVE'?'LIVE':marketDataStatus==='PARTIAL'?'PARTIAL':marketDataStatus==='INTERNAL'?'DEMO':'UNAVAILABLE';
 
 	return <div className="market-stage is-live" aria-label={translate('marketView')}>
 		<div className="market-stage-top">
@@ -84,14 +88,16 @@ export default function HomeMarketPreview(){
 			</div>
 			<div className={`market-stage-price ${flash?`flash-${flash}`:''}`} aria-live="polite">
 				{current?current.price.toLocaleString(undefined,{minimumFractionDigits:2,maximumFractionDigits:current.price<10?4:2}):status==='error'?translate('unavailable'):translate('loading')}
-				<small>{'Latest price'} · USD{changePct!==undefined&&<em className={changeClass}>{changePct>=0?'+':''}{(changePct*100).toFixed(2)}%</em>}</small>
+				<small>{marketDataStatus==='INTERNAL'?'Simulated DEMO price':'Latest price'} · USD{changePct!==undefined&&<em className={changeClass}>{changePct>=0?'+':''}{(changePct*100).toFixed(2)}%</em>}</small>
 			</div>
 		</div>
 		<div className="market-stage-chart">
 			<div className="trade-chart-timeframes home-market-timeframes" role="group" aria-label="Chart timeframe">
 				{TIMEFRAMES.map(item=><button type="button" key={item.id} aria-pressed={timeframe===item.id} onClick={()=>setTimeframe(item.id)}>{item.label}</button>)}
 			</div>
-			{currentHistory&&isExternalMarketDataSource(currentHistory.source)
+			{marketDataStatus==='INTERNAL'
+				?<div className="market-chart-empty" role="status">Live chart history is unavailable. This simulated DEMO reference price is not a live market quote.</div>
+				:currentHistory&&isExternalMarketDataSource(currentHistory.source)
 				?<LivePriceChart candles={currentHistory.candles} quote={currentQuoteSource&&isExternalMarketDataSource(currentQuoteSource)?current.quote:undefined} timeframe={timeframe} interval={currentHistory.interval} source={currentHistory.source} loading={historyLoading} error={historyError}/>
 				:currentHistory
 					?<div className="market-chart-empty" role="status">Provider-backed market history is unavailable; indicative prices are not plotted as live data.</div>
@@ -106,7 +112,7 @@ export default function HomeMarketPreview(){
 				</button>)}
 				{!visibleMarkets.length&&<span className="muted">{'No instruments available'}</span>}
 			</div>
-			<span className="market-feed-status"><span className={`source-dot ${marketDataStatus==='LIVE'?'is-live':''}`}/>{status==='ready'?marketDataStatus==='LIVE'?'Current market prices':marketDataStatus==='PARTIAL'?'Some prices may be stale':'Indicative prices':translate('feedStatus',{status:status.toUpperCase()})}</span>
+			<span className="market-feed-status"><span className={`source-dot ${marketDataStatus==='LIVE'?'is-live':''}`}/>{status==='ready'?marketDataStatus==='LIVE'?'Current market prices':marketDataStatus==='PARTIAL'?'Some prices may be stale':marketDataStatus==='INTERNAL'?'Simulated DEMO prices · not live':'Indicative prices':translate('feedStatus',{status:status.toUpperCase()})}</span>
 		</div>
 	</div>;
 }

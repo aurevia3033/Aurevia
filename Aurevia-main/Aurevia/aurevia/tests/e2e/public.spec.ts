@@ -221,12 +221,26 @@ test('terms and privacy policies remain readable to signed-out visitors',async({
 	await expect(page.locator('.policy-consent-dialog')).toBeHidden();
 });
 
-test('homepage reports unavailable market data when no live provider is configured',async({page})=>{
+test('homepage clearly shows simulated DEMO prices when live providers are unavailable',async({page})=>{
+	await page.route('**/api/live-markets?*',route=>route.fulfill({
+		status:200,
+		contentType:'application/json',
+		body:JSON.stringify({quotes:[{asset:{id:'BTC',ticker:'BTC-USD',name:'Bitcoin USD',type:'CRYPTO',currency:'USD'},error:'No provider quote'}],marketDataStatus:'UNAVAILABLE'}),
+	}));
+	await page.route('**/api/market',route=>route.fulfill({
+		status:200,
+		contentType:'application/json',
+		body:JSON.stringify([{
+			symbol:'BTC/USD',baseAsset:'BTC',quoteAsset:'USD',name:'Bitcoin / USD',price:'92500',
+			dataMode:'SIMULATED',lastUpdatedAt:new Date().toISOString(),
+		}]),
+	}));
 	await page.goto('/');
-	await expect(page.locator('.market-time .live-pill')).toHaveText('UNAVAILABLE');
-	await expect(page.locator('.market-stage-price')).toContainText('Unavailable');
-	await expect(page.locator('.market-stage-price')).not.toContainText(/\d/);
-	await expect(page.locator('.market-chart-empty')).toContainText(/unavailable/i);
+	await expect(page.locator('.market-time .live-pill')).toHaveText('DEMO');
+	await expect(page.locator('.market-stage-price')).toContainText('92,500.00');
+	await expect(page.locator('.market-stage-price')).toContainText('Simulated DEMO price');
+	await expect(page.locator('.market-chart-empty')).toContainText('not a live market quote');
+	await expect(page.locator('.market-feed-status')).toContainText('Simulated DEMO prices · not live');
 });
 
 test('homepage clearly labels stock and crypto trading modes',async({page})=>{
