@@ -3,34 +3,22 @@
 import {useCallback,useEffect,useLayoutEffect,useRef,useState} from 'react';
 import type {MouseEvent,ReactNode} from 'react';
 import {usePathname} from 'next/navigation';
-import {useSession} from 'next-auth/react';
 import AureviaLoading from '@/components/AureviaLoading';
-import AureviaStartup,{AureviaStartupLoader} from '@/components/AureviaStartup';
+import AureviaStartup from '@/components/AureviaStartup';
 
-const startupKey='aurevia-startup-complete';
-const exitDurationMs=120;
 const introExitDurationMs=450;
-const maximumStartupWaitMs=350;
 const navigationLoaderDelayMs=250;
 const navigationLoaderTimeoutMs=15_000;
-type StartupMode='loading'|'hidden';
 
 export default function StartupShell({children}:{children:ReactNode}){
-	const {status}=useSession();
 	const pathname=usePathname();
 	const currentPath=useRef(pathname);
-	const startupInitialized=useRef(false);
-	const autoIntroStarted=useRef(false);
 	const navigationLoaderTimer=useRef<number|undefined>(undefined);
 	const navigationTimeoutTimer=useRef<number|undefined>(undefined);
 	const introExitTimer=useRef<number|undefined>(undefined);
-	const [ready,setReady]=useState(false);
-	const [startupMode,setStartupMode]=useState<StartupMode>(pathname==='/'?'hidden':'loading');
-	const [isExiting,setIsExiting]=useState(false);
 	const [showPageTransition,setShowPageTransition]=useState(false);
 	const [showIntro,setShowIntro]=useState(false);
 	const [isIntroExiting,setIsIntroExiting]=useState(false);
-	const showStartup=startupMode!=='hidden';
 
 	const clearNavigationTimers=useCallback(()=>{
 		if(navigationLoaderTimer.current!==undefined)window.clearTimeout(navigationLoaderTimer.current);
@@ -40,14 +28,13 @@ export default function StartupShell({children}:{children:ReactNode}){
 	},[]);
 
 	const startNavigation=useCallback(()=>{
-		if(!ready||startupMode!=='hidden')return;
 		clearNavigationTimers();
 		navigationLoaderTimer.current=window.setTimeout(()=>setShowPageTransition(true),navigationLoaderDelayMs);
 		navigationTimeoutTimer.current=window.setTimeout(()=>{
 			setShowPageTransition(false);
 			clearNavigationTimers();
 		},navigationLoaderTimeoutMs);
-	},[clearNavigationTimers,ready,startupMode]);
+	},[clearNavigationTimers]);
 
 	const handleNavigationClick=useCallback((event:MouseEvent<HTMLDivElement>)=>{
 		if(event.defaultPrevented||event.button!==0||event.metaKey||event.ctrlKey||event.shiftKey||event.altKey)return;
@@ -57,12 +44,6 @@ export default function StartupShell({children}:{children:ReactNode}){
 		if(anchor.origin!==window.location.origin||anchor.pathname===window.location.pathname)return;
 		startNavigation();
 	},[startNavigation]);
-
-	const markStartupComplete=useCallback(()=>{
-		try{sessionStorage.setItem(startupKey,'1')}catch{}
-		document.documentElement.dataset.aureviaStartupComplete='true';
-		setStartupMode('hidden');
-	},[]);
 
 	const completeIntro=useCallback(()=>{
 		delete document.documentElement.dataset.aureviaIntroPending;
@@ -97,12 +78,6 @@ export default function StartupShell({children}:{children:ReactNode}){
 		if(window.matchMedia('(prefers-reduced-motion: reduce)').matches){
 			delete document.documentElement.dataset.aureviaIntroPending;
 			setShowIntro(false);
-			return;
-		}
-		if(!autoIntroStarted.current){
-			autoIntroStarted.current=true;
-			document.documentElement.dataset.aureviaIntroPending='true';
-			setShowIntro(true);
 			return;
 		}
 		delete document.documentElement.dataset.aureviaIntroPending;
@@ -205,24 +180,6 @@ export default function StartupShell({children}:{children:ReactNode}){
 		};
 	},[]);
 
-	useEffect(()=>{
-		if(startupInitialized.current){
-			setReady(true);
-			return;
-		}
-		startupInitialized.current=true;
-		let startupSeen=false;
-		try{
-			startupSeen=sessionStorage.getItem(startupKey)==='1';
-		}catch{}
-		if(pathname==='/'||startupSeen){
-			try{sessionStorage.setItem(startupKey,'1')}catch{}
-			document.documentElement.dataset.aureviaStartupComplete='true';
-			setStartupMode('hidden');
-		}
-		setReady(true);
-	},[pathname]);
-
 	useLayoutEffect(()=>{
 		if(currentPath.current===pathname)return;
 		currentPath.current=pathname;
@@ -238,28 +195,10 @@ export default function StartupShell({children}:{children:ReactNode}){
 		};
 	},[clearNavigationTimers,startNavigation]);
 
-	useEffect(()=>{
-		if(!ready||startupMode!=='loading')return;
-		if(window.matchMedia('(prefers-reduced-motion: reduce)').matches){
-			markStartupComplete();
-			return;
-		}
-		let exitTimer:number|undefined;
-		const timer=window.setTimeout(()=>{
-			setIsExiting(true);
-			exitTimer=window.setTimeout(markStartupComplete,exitDurationMs);
-		},status==='loading'?maximumStartupWaitMs:0);
-		return()=>{
-			window.clearTimeout(timer);
-			if(exitTimer!==undefined)window.clearTimeout(exitTimer);
-		};
-	},[markStartupComplete,ready,startupMode,status]);
-
 	return <div className="app-shell" onClickCapture={handleNavigationClick}>
 		<div className="aurevia-scroll-progress" aria-hidden="true"/>
 		<div className="scene-depth" aria-hidden="true"/>
-		<div className="scene-content"><div inert={showStartup||showIntro} aria-hidden={showStartup||showIntro}>{children}</div>
-			{startupMode==='loading'&&<AureviaStartupLoader isExiting={isExiting}/>}
+		<div className="scene-content"><div inert={showIntro} aria-hidden={showIntro}>{children}</div>
 			{showPageTransition&&<div className="page-transition-loader">
 				<AureviaLoading variant="inline" label="Loading the next page"/>
 			</div>}

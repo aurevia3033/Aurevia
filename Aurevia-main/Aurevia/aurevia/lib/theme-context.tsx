@@ -53,11 +53,11 @@ function persistAnonymousTheme(theme:Theme){
 	return saved;
 }
 
-export function ThemeProvider({children,initialTheme,initialUserId}:{children:ReactNode;initialTheme:Theme;initialUserId:string|null}){
+export function ThemeProvider({children,initialTheme}:{children:ReactNode;initialTheme:Theme}){
 	const {data:session,status}=useSession();
 	const [theme,setTheme]=useState(initialTheme);
 	const [error,setError]=useState('');
-	const activeUserId=useRef<string|null>(initialUserId);
+	const activeUserId=useRef<string|null>(null);
 	const requestGeneration=useRef(0);
 	const selectionGeneration=useRef(0);
 	const saveQueue=useRef<Promise<void>>(Promise.resolve());

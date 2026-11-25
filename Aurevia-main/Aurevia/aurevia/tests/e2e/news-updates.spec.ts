@@ -134,7 +134,10 @@ test('homepage video section uses its full grid width on mobile and desktop',asy
 test('Aurevia TV keeps selected programs inside the platform',async({page})=>{
 	await mockNewsFeed(page);
 	await page.setViewportSize({width:1280,height:900});
-	await page.goto('/news');
+	const response=await page.goto('/news');
+	const contentSecurityPolicy=response?.headers()['content-security-policy']||'';
+	expect(contentSecurityPolicy).toContain('https://www.youtube-nocookie.com');
+	expect(contentSecurityPolicy).toContain('https://player.vimeo.com');
 
 	const stage=page.getByRole('region',{name:'Aurevia TV'});
 	await expect(stage.getByRole('heading',{name:'Aurevia market briefing video'})).toBeVisible();

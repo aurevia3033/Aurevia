@@ -1317,7 +1317,7 @@ test('startup releases page interaction if session initialization is delayed',as
 	await page.goto('/login');
 	await waitForStartup(page);
 	const startup=page.getByRole('status',{name:'Loading Aurevia Exchange'});
-	if(await startup.count())await expect(startup).toBeHidden({timeout:5000});
+	await expect(startup).toHaveCount(0);
 	const email=page.getByLabel('Email address');
 	await email.fill('qa@example.invalid');
 	await expect(email).toHaveValue('qa@example.invalid');

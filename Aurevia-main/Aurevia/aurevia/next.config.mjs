@@ -15,7 +15,7 @@ const nextConfig={
 		return [{
 			source:'/:path*',
 			headers:[
-				{key:'Content-Security-Policy',value:"base-uri 'self'; object-src 'none'; frame-src 'self' https://auth.akedly.io; frame-ancestors 'none'"},
+				{key:'Content-Security-Policy',value:"base-uri 'self'; object-src 'none'; frame-src 'self' https://auth.akedly.io https://www.youtube-nocookie.com https://player.vimeo.com; frame-ancestors 'none'"},
 				{key:'Permissions-Policy',value:'camera=(self), microphone=(), geolocation=()'},
 				{key:'Referrer-Policy',value:'no-referrer'},
 				{key:'Strict-Transport-Security',value:'max-age=31536000'},

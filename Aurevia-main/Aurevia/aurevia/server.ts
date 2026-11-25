@@ -6,13 +6,20 @@ import {randomBytes} from 'node:crypto';
 import {tickMarkets} from './lib/market';
 import {MARKET_ASSETS} from './lib/live-market';
 import {getMarketQuoteWithFallback,getAdditionalMarketProviderKeys} from './lib/market-data-service';
-import {getServerConfiguration} from './lib/config/env';
+import {configurationSummary,getServerConfiguration} from './lib/config/env';
 import {logAkedlyReadiness} from './lib/akedly';
 import {settleMaturedSimulatedInvestments} from './lib/demo-investment-settlement';
 import {resolveRenderApplicationUrls} from './lib/config/render-urls';
 
 loadEnvConfig(process.cwd());
-if(process.env.NODE_ENV==='production')logAkedlyReadiness();
+if(process.env.NODE_ENV==='production'){
+	logAkedlyReadiness();
+	const {marketDataConfigured,marketDataProviders}=configurationSummary(getServerConfiguration());
+	console.info('[startup] Market-data configuration status',{
+		configured:marketDataConfigured,
+		...marketDataProviders,
+	});
+}
 const renderApplicationUrls=resolveRenderApplicationUrls(process.env);
 if(renderApplicationUrls){
 	process.env.NEXTAUTH_URL=renderApplicationUrls.nextAuthUrl;

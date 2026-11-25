@@ -10,11 +10,12 @@ import Nav from '@/components/Nav';
 import AureviaIcon from '@/components/AureviaIcon';
 import LivePriceChart from '@/components/LivePriceChart';
 import {COMPARISON_SYMBOLS,DEFAULT_WATCHLIST,MARKET_ASSETS,TIMEFRAMES,getMarketAsset,isExternalMarketDataSource,type MarketCandle,type MarketQuote,type TimeframeId} from '@/lib/live-market';
+import {marketHistoryCacheKey,readMarketHistoryCache,writeMarketHistoryCache} from '@/lib/market-history-cache';
+import type {MarketHistoryResponse} from '@/lib/market-history-cache';
 import {setMarketWatchlistUserScope,useMarketWatchlists} from '@/lib/market-watchlists';
 
 type QuoteError={asset:NonNullable<ReturnType<typeof getMarketAsset>>;error:string};
 type QuotesResponse={quotes:Array<MarketQuote|QuoteError>;source:string};
-type HistoryResponse={quote:MarketQuote|null;candles:MarketCandle[];timeframe:TimeframeId;interval:string;source:string};
 type ReturnMetric={label:string;days:number;value:number|null};
 type MarketAnalysis={summary:string;observations:Array<{symbol:string;observation:string}>;caveat:string};
 type MarketDataExplanation={symbol:string;dataType:'quote'|'history';status:'current_provider'|'stale_provider'|'internal_reference'|'unavailable';explanation:{explanation:string;recommendedAction:'refresh'|'configure_market_provider'|'try_later'|'contact_support';caveat:string}};
@@ -40,6 +41,7 @@ function LiveMarketDashboardContent(){
       return stored;
     }catch{return null}
   });
+  const [savedHistory,setSavedHistory]=useState<{key:string;data:MarketHistoryResponse}|null>(null);
   const requestedSymbol=searchParams.get('symbol')?.toUpperCase()||'';
   const [appliedRequestedSymbol,setAppliedRequestedSymbol]=useState('');
   const watchlists=useMarketWatchlists(state=>state.watchlists);
@@ -72,6 +74,7 @@ function LiveMarketDashboardContent(){
   const activeList=watchlists.find(list=>list.id===activeWatchlistId)||watchlists[0];
   const initialSymbol=getMarketAsset(requestedSymbol)&&requestedSymbol!==appliedRequestedSymbol?requestedSymbol:selectedSymbol;
   const selectedAsset=getMarketAsset(initialSymbol)||getMarketAsset('BTC')!;
+  const historyCacheKey=marketHistoryCacheKey(selectedAsset.id,timeframe);
   const quoteIds=Array.from(new Set([selectedAsset.id,...activeList.symbols,...DEFAULT_WATCHLIST,...COMPARISON_SYMBOLS]));
   const batchQuery=useQuery({
     queryKey:['live-market-quotes',quoteIds.join(',')],
@@ -87,12 +90,19 @@ function LiveMarketDashboardContent(){
   const historyQuery=useQuery({
     queryKey:['live-market-history',selectedAsset.id,timeframe],
     queryFn:()=>fetchHistory(selectedAsset.id,timeframe),
+    placeholderData:savedHistory?.key===historyCacheKey?savedHistory.data:undefined,
     staleTime:30_000,
     refetchInterval:60_000,
-    retry:2,
-    retryDelay:attempt=>Math.min(1_000*2**attempt,5_000),
+    retry:0,
   });
-  const annualQuery=useQuery({queryKey:['live-market-history',selectedAsset.id,'1y'],queryFn:()=>fetchHistory(selectedAsset.id,'1y'),refetchInterval:60_000,staleTime:45_000,enabled:timeframe!=='1y'&&historyQuery.isSuccess});
+  useEffect(()=>{
+    setSavedHistory(null);
+    try{
+      const cached=readMarketHistoryCache(window.localStorage,historyCacheKey);
+      if(cached)setSavedHistory({key:historyCacheKey,data:cached});
+    }catch{}
+  },[historyCacheKey]);
+  const annualQuery=useQuery({queryKey:['live-market-history',selectedAsset.id,'1y'],queryFn:()=>fetchHistory(selectedAsset.id,'1y'),refetchInterval:60_000,staleTime:45_000,enabled:timeframe!=='1y'&&historyQuery.isSuccess&&!historyQuery.data?.isCached});
   const batchQuotes=useMemo(()=>{
     const map=new Map((batchQuery.data?.quotes||[]).map(item=>[item.asset.id,item]));
     for(const [symbol,streamQuote] of Object.entries(streamUpdates)){
@@ -340,7 +350,8 @@ function LiveMarketDashboardContent(){
           <LivePriceChart key={`${selectedAsset.id}:${timeframe}`} candles={historyQuery.data?.candles||[]} quote={activeQuote||undefined} timeframe={timeframe} interval={historyQuery.data?.interval} source={historyQuery.data?.source} loading={historyQuery.isLoading} error=""/>
           {historyQuery.isError&&<div className="live-data-alert" role={historyQuery.data?'status':'alert'}>
             {historyQuery.error instanceof Error?historyQuery.error.message:'Historical market data is temporarily unavailable.'}
-            {historyQuery.data&&' Previously loaded chart data is still displayed.'}
+            {historyQuery.data?.isCached&&` Showing saved chart history${historyQuery.data.cachedAt?` from ${new Date(historyQuery.data.cachedAt).toLocaleString()}`:''}; live history could not be refreshed.`}
+            {historyQuery.data&&!historyQuery.data.isCached&&' Previously loaded chart data is still displayed.'}
             {' '}<button type="button" onClick={()=>void historyQuery.refetch()}>Retry chart history</button>
           </div>}
           <div className="live-chart-stats">
@@ -398,13 +409,25 @@ async function fetchQuotes(symbols:string[]):Promise<QuotesResponse>{
   }
 }
 
-async function fetchHistory(symbol:string,timeframe:TimeframeId):Promise<HistoryResponse>{
-  const response=await fetch(`/api/live-markets/${encodeURIComponent(symbol)}?timeframe=${timeframe}`,{cache:'no-store'});
+async function fetchHistory(symbol:string,timeframe:TimeframeId):Promise<MarketHistoryResponse>{
+  let response:Response;
+  try{
+    response=await fetch(`/api/live-markets/${encodeURIComponent(symbol)}?timeframe=${timeframe}`,{
+      cache:'no-store',signal:AbortSignal.timeout(8_000),
+    });
+  }catch(error){
+    if(error instanceof Error&&error.name==='TimeoutError'){
+      throw new Error('Chart history request timed out. Showing saved history if available.');
+    }
+    throw error;
+  }
   const body:unknown=await response.json();
   const message=responseErrorMessage(body);
   if(!response.ok||message)throw new Error(message||'Historical market data is unavailable.');
   if(!body||typeof body!=='object'||!('candles'in body)||!Array.isArray(body.candles))throw new Error('Historical market response is invalid.');
-  return body as HistoryResponse;
+  const history=body as MarketHistoryResponse;
+  try{writeMarketHistoryCache(window.localStorage,marketHistoryCacheKey(symbol,timeframe),history)}catch{}
+  return history;
 }
 
 function responseErrorMessage(body:unknown){

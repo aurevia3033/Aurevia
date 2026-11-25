@@ -41,3 +41,5 @@ NEXTAUTH_URL=
 ```
 
 Do not put provider API keys in client bundles. Only `NEXT_PUBLIC_*` values are public.
+
+The production server reads these values from `process.env`, including Render's service environment. At startup it logs only whether each provider is configured and whether the production licensing flag is set; it never logs API-key values.
