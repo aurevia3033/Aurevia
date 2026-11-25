@@ -466,13 +466,13 @@ html[data-theme-name] :is(a,button:not(:disabled),[role="button"],summary):activ
 }
 .user-more-theme{display:grid;gap:8px;padding:12px 16px;border-top:1px solid var(--theme-divider)}
 .user-more-theme>span{color:var(--theme-text-secondary);font-size:11px;font-weight:700;letter-spacing:.08em;text-transform:uppercase}
-html[data-theme-name="forest-green"] .user-more-menu{border-color:var(--theme-border);background:var(--theme-popover);color:var(--theme-text);box-shadow:var(--theme-shadow)}
-html[data-theme-name="forest-green"] .user-more-heading{border-color:var(--theme-divider)}
-html[data-theme-name="forest-green"] .user-more-heading h2{color:var(--theme-text)}
-html[data-theme-name="forest-green"] .user-more-group h3{color:var(--theme-accent)}
-html[data-theme-name="forest-green"] .user-more-group>a{border-color:var(--theme-border);background:var(--theme-surface);color:var(--theme-text-secondary)}
-html[data-theme-name="forest-green"] .user-more-group>a>svg{color:var(--theme-accent)}
-html[data-theme-name="forest-green"] .user-more-logout{border-color:color-mix(in srgb,var(--theme-negative) 28%,transparent);background:color-mix(in srgb,var(--theme-negative) 5%,transparent);color:var(--theme-negative)}
+html[data-theme-name="forest-green"] body:has(.site-nav-user-shell) .user-more-menu{border-color:var(--theme-border);background:var(--theme-popover);color:var(--theme-text);box-shadow:var(--theme-shadow)}
+html[data-theme-name="forest-green"] body:has(.site-nav-user-shell) .user-more-heading{border-color:var(--theme-divider)}
+html[data-theme-name="forest-green"] body:has(.site-nav-user-shell) .user-more-heading h2{color:var(--theme-text)}
+html[data-theme-name="forest-green"] body:has(.site-nav-user-shell) .user-more-group h3{color:var(--theme-accent)}
+html[data-theme-name="forest-green"] body:has(.site-nav-user-shell) .user-more-group>a{border-color:var(--theme-border);background:var(--theme-surface);color:var(--theme-text-secondary)}
+html[data-theme-name="forest-green"] body:has(.site-nav-user-shell) .user-more-group>a>svg{color:var(--theme-accent)}
+html[data-theme-name="forest-green"] body:has(.site-nav-user-shell) .user-more-logout{border-color:color-mix(in srgb,var(--theme-negative) 28%,transparent);background:color-mix(in srgb,var(--theme-negative) 5%,transparent);color:var(--theme-negative)}
 .admin-theme-preference{display:none}
 @media(max-width:640px){
 	html[data-theme-name] .theme-toggle-option{min-height:36px;padding:5px 7px;font-size:10px}
