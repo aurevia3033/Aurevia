@@ -14,6 +14,7 @@ type HomeMarketDataValue={
 
 const marketSymbols=['DJI','SPX','NASDAQ','BTC','AAPL','MSFT','NVDA','AMZN','GOOGL','TSLA','EURGBP'].join(',');
 const refreshIntervalMs=3_000;
+const liveQuoteTimeoutMs=5_000;
 const HomeMarketDataContext=createContext<HomeMarketDataValue|null>(null);
 
 export function mapSimulatedHomeMarketFeed(payload:unknown):HomeMarketItem[]{
@@ -77,7 +78,10 @@ export function HomeMarketDataProvider({children}:{children:ReactNode}){
 			refreshing=true;
 			try{
 				try{
-					const response=await fetch(`/api/live-markets?symbols=${encodeURIComponent(marketSymbols)}`,{cache:'no-store'});
+					const response=await fetch(`/api/live-markets?symbols=${encodeURIComponent(marketSymbols)}`,{
+						cache:'no-store',
+						signal:AbortSignal.timeout(liveQuoteTimeoutMs),
+					});
 					const payload=await response.json() as {quotes?:Array<MarketQuote|{asset?:{id?:string};error?:string}>;marketDataStatus?:string};
 					const quotes=(payload.quotes??[]).filter((item):item is MarketQuote=>'price'in item&&Number.isFinite(item.price)&&typeof item.asset?.id==='string');
 					const marketDataStatus=payload.marketDataStatus==='LIVE'||payload.marketDataStatus==='PARTIAL'||payload.marketDataStatus==='INTERNAL'?payload.marketDataStatus:'UNAVAILABLE';

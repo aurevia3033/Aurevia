@@ -222,11 +222,16 @@ test('terms and privacy policies remain readable to signed-out visitors',async({
 });
 
 test('homepage clearly shows simulated DEMO prices when live providers are unavailable',async({page})=>{
-	await page.route('**/api/live-markets?*',route=>route.fulfill({
-		status:200,
-		contentType:'application/json',
-		body:JSON.stringify({quotes:[{asset:{id:'BTC',ticker:'BTC-USD',name:'Bitcoin USD',type:'CRYPTO',currency:'USD'},error:'No provider quote'}],marketDataStatus:'UNAVAILABLE'}),
-	}));
+	await page.route('**/api/live-markets?*',async route=>{
+		await new Promise(resolve=>setTimeout(resolve,6_000));
+		try{
+			await route.fulfill({
+				status:200,
+				contentType:'application/json',
+				body:JSON.stringify({quotes:[{asset:{id:'BTC',ticker:'BTC-USD',name:'Bitcoin USD',type:'CRYPTO',currency:'USD'},error:'No provider quote'}],marketDataStatus:'UNAVAILABLE'}),
+			});
+		}catch{/* the page should have timed out and used its demo fallback */}
+	});
 	await page.route('**/api/market',route=>route.fulfill({
 		status:200,
 		contentType:'application/json',
