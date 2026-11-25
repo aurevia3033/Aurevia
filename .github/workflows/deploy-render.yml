@@ -20,8 +20,8 @@ jobs:
           RENDER_DEPLOY_HOOK_URL: ${{ secrets.RENDER_DEPLOY_HOOK_URL }}
         run: |
           if [ -z "${RENDER_DEPLOY_HOOK_URL:-}" ]; then
-            echo "::error::Configure the RENDER_DEPLOY_HOOK_URL repository secret."
-            exit 1
+            echo "::warning::RENDER_DEPLOY_HOOK_URL is not configured; verify Render Auto-Deploy is enabled."
+            exit 0
           fi
           curl --fail --silent --show-error --request POST "$RENDER_DEPLOY_HOOK_URL" --output /dev/null
           echo "Render accepted the deployment trigger."
