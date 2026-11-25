@@ -63,6 +63,7 @@ vi.mock('@/lib/db',()=>({db:{
 }}));
 vi.mock('@/lib/email',()=>({
 	isEmailConfigured:mocks.isEmailConfigured,
+	isEmailDeliveryAvailable:mocks.isEmailConfigured,
 	sendEmail:mocks.sendEmail,
 }));
 vi.mock('@/lib/verification-delivery',()=>({
@@ -87,27 +88,6 @@ function request(body?:unknown){
 		method:'POST',
 		headers:{'content-type':'application/json'},
 		body:body===undefined?undefined:JSON.stringify(body),
-	});
-
-	it('normalizes Nigerian mobile numbers to E.164 before SMS delivery',async()=>{
-		const response=await sendPhoneCode(request({phone:'08031234567',countryCode:'NG'}));
-
-		expect(response.status).toBe(200);
-		expect(mocks.sendTermii).toHaveBeenCalledWith('+2348031234567',expect.any(String));
-		expect(state.challenge?.contact).toBe('+2348031234567');
-	});
-
-	it('reports a database schema outage distinctly when verification status cannot load',async()=>{
-		mocks.verificationFindMany.mockRejectedValueOnce(Object.assign(new Error('internal detail'),{code:'P2021'}));
-		const errorLog=vi.spyOn(console,'error').mockImplementation(()=>{});
-
-		try{
-			const response=await getContactStatus();
-			expect(response.status).toBe(503);
-			expect(await response.json()).toMatchObject({error:expect.stringContaining('database schema needs an update')});
-			expect(JSON.stringify(errorLog.mock.calls)).not.toContain('internal detail');
-			expect(JSON.stringify(errorLog.mock.calls)).toContain('P2021');
-		}finally{errorLog.mockRestore()}
 	});
 }
 
@@ -216,6 +196,27 @@ describe('independent Settings contact verification',()=>{
 		mocks.rateLimit.mockImplementation(()=>undefined);
 	});
 
+	it('normalizes Nigerian mobile numbers to E.164 before SMS delivery',async()=>{
+		const response=await sendPhoneCode(request({phone:'08031234567',countryCode:'NG'}));
+
+		expect(response.status).toBe(200);
+		expect(mocks.sendTermii).toHaveBeenCalledWith('+2348031234567',expect.any(String));
+		expect(state.challenge?.contact).toBe('+2348031234567');
+	});
+
+	it('reports a database schema outage distinctly when verification status cannot load',async()=>{
+		mocks.verificationFindMany.mockRejectedValueOnce(Object.assign(new Error('internal detail'),{code:'P2021'}));
+		const errorLog=vi.spyOn(console,'error').mockImplementation(()=>{});
+
+		try{
+			const response=await getContactStatus();
+			expect(response.status).toBe(503);
+			expect(await response.json()).toMatchObject({error:expect.stringContaining('database schema needs an update')});
+			expect(JSON.stringify(errorLog.mock.calls)).not.toContain('internal detail');
+			expect(JSON.stringify(errorLog.mock.calls)).toContain('P2021');
+		}finally{errorLog.mockRestore()}
+	});
+
 	it('sends and consumes a one-time email code, keeping phone status independent',async()=>{
 		const sent=await sendEmailCode(request());
 		const code=state.emailText.match(/\b\d{6}\b/)?.[0];
@@ -320,7 +321,8 @@ describe('independent Settings contact verification',()=>{
 	});
 
 	it('enforces the persisted per-challenge phone attempt limit',async()=>{
-		await sendPhoneCode(request({phone:'2025550123',countryCode:'US'}));
+		const sent=await sendPhoneCode(request({phone:'2025550123',countryCode:'US'}));
+		expect(sent.status).toBe(200);
 		state.challenge!.attempts=5;
 
 		expect((await verifyPhoneCode(request({code:'123456'}))).status).toBe(429);

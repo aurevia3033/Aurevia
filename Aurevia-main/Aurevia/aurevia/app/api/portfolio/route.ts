@@ -76,10 +76,6 @@ export async function GET(){
       return {instrumentId:instrument.id,price:new Prisma.Decimal(free.price),quotedAt:new Date(free.updatedAt),source:free.source,isStale:free.isStale};
      }
     }catch{/* no free quote */}
-    // 3) Last instrument mark from the database (never leave the position unvalued when a book price exists)
-    if(instrument.price&&Number(instrument.price)>0){
-     return {instrumentId:instrument.id,price:new Prisma.Decimal(instrument.price),quotedAt:new Date(),source:'Instrument book',isStale:true};
-    }
     return null;
    }));
    for(const quote of quotes)if(quote)providerMarks.set(quote.instrumentId,quote);
@@ -96,17 +92,10 @@ export async function GET(){
    if(!mark)return {currentPrice:null,marketValue:null,unrealizedPnl:null,valuationStatus:'UNAVAILABLE' as const,valuationAsOf:null,valuationSource:null};
    // Prefer live free/configured quotes even if slightly aged so portfolio never shows empty values when a price exists
    const valuation=valueMarketMark({side:position.side,quantity:position.quantity,entryPrice:position.entryPrice,currentPrice:mark.price,quotedAt:mark.quotedAt});
-   let status=mark.isStale&&valuation.status!=='UNAVAILABLE'?'STALE':valuation.status;
-   let currentPrice=valuation.currentPrice;
-   let marketValue=valuation.marketValue;
-   let unrealizedPnl=valuation.unrealizedPnl;
-   if(valuation.status!=='CURRENT'&&mark.price.gt(0)){
-    const direction=position.side==='BUY'?1:-1;
-    currentPrice=mark.price;
-    marketValue=mark.price.mul(position.quantity).mul(direction);
-    unrealizedPnl=position.entryPrice.mul(-direction).plus(mark.price.mul(direction)).mul(position.quantity);
-    status=mark.isStale?'STALE':'CURRENT';
-   }
+   const status=mark.isStale&&valuation.status!=='UNAVAILABLE'?'STALE':valuation.status;
+   const currentPrice=valuation.currentPrice;
+   const marketValue=valuation.marketValue;
+   const unrealizedPnl=valuation.unrealizedPnl;
    return {
     currentPrice,
     marketValue,

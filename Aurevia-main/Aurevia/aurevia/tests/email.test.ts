@@ -16,6 +16,7 @@ describe('shared outbound email delivery',()=>{
 			'SMTP_HOST','SMTP_PORT','SMTP_USER','SMTP_PASSWORD','SMTP_FROM',
 			'RESEND_API_KEY','RESEND_FROM_EMAIL','VERIFICATION_EMAIL_FROM',
 		])vi.stubEnv(key,'');
+		vi.stubEnv('EMAIL_PLATFORM_LOCAL','0');
 	});
 
 	afterEach(()=>{

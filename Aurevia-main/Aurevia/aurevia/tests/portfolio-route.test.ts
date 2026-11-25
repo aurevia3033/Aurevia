@@ -40,6 +40,9 @@ vi.mock('@/lib/market-data-service',()=>({
 	getMarketQuoteWithFallback:mocks.marketQuote,
 	getAdditionalMarketProviderKeys:vi.fn(()=>({})),
 }));
+vi.mock('@/lib/free-market-quotes',()=>({
+	getFreeMarketQuote:vi.fn().mockResolvedValue(null),
+}));
 vi.mock('@/lib/paper-ledger-reconciliation',()=>({getWalletBackedPaperInstrumentIds:mocks.walletBackedPaperInstrumentIds}));
 
 import {GET} from '@/app/api/portfolio/route';
@@ -107,7 +110,7 @@ describe('portfolio route provider valuation',()=>{
 		expect(result.cashBalance).toBe('250');
 		expect(result.availableCashBalance).toBe('250');
 		expect(result.totalValue).toBe('470');
-		expect(result.paperPositions[0].valuationSource).toBe('Market quote');
+		expect(result.paperPositions[0].valuationSource).toBe('Twelve Data');
 	});
 
 	it('excludes an unreconciled legacy position from account value without changing its records',async()=>{
@@ -179,7 +182,7 @@ describe('portfolio route provider valuation',()=>{
 		const result=await response.json();
 
 		expect(response.status).toBe(200);
-		expect(result.positions[0]).toMatchObject({currentPrice:'110',marketValue:'220',unrealizedPnl:'20',valuationStatus:'CURRENT',valuationSource:'Market quote'});
+		expect(result.positions[0]).toMatchObject({currentPrice:'110',marketValue:'220',unrealizedPnl:'20',valuationStatus:'CURRENT',valuationSource:'Twelve Data'});
 		expect(result.positionValue).toBe('220');
 		expect(result.totalValue).toBe('470');
 		expect(result.unrealizedPnl).toBe('20');

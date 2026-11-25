@@ -13,6 +13,10 @@ vi.mock('@/lib/market-data/provider-manager',()=>({
 	getConfiguredMarketSearch:mocks.getSearch,
 	getConfiguredMarketIndicator:mocks.getIndicator,
 }));
+vi.mock('@/lib/free-market-quotes',()=>({
+	getFreeMarketQuote:vi.fn().mockResolvedValue(null),
+	getFreeMarketHistory:vi.fn().mockResolvedValue([]),
+}));
 
 import {getMarketHistoryWithFallback,getMarketIndicator,getMarketQuoteWithFallback,searchMarketSymbols} from '@/lib/market-data-service';
 
@@ -38,7 +42,7 @@ describe('market-data service provider boundaries',()=>{
 		});
 		await expect(getMarketQuoteWithFallback(asset,providers)).resolves.toMatchObject({source:'Twelve Data',isStale:true});
 		mocks.getQuote.mockResolvedValueOnce({asset,price:200,updatedAt:'not-a-timestamp',source:'Twelve Data'});
-		await expect(getMarketQuoteWithFallback(asset,providers)).rejects.toMatchObject({status:502});
+		await expect(getMarketQuoteWithFallback(asset,providers)).rejects.toMatchObject({status:503});
 	});
 
 	it('does not fabricate a quote when no provider returns data',async()=>{
