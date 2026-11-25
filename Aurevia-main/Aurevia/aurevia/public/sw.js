@@ -1,6 +1,6 @@
 'use strict';
 
-const CACHE_NAME='aurevia-static-v2';
+const CACHE_NAME='aurevia-static-v3';
 const CACHE_PREFIX='aurevia-static-';
 const APP_SHELL=['/manifest.webmanifest','/aurevia-logo.png','/icons/icon-192.png','/icons/icon-512.png'];
 const fallback={title:'Aurevia Exchange',body:'There is a new update to your account.',url:'/dashboard'};

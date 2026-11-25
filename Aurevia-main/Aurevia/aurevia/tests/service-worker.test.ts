@@ -84,12 +84,13 @@ describe('Aurevia browser push service worker',()=>{
 	});
 
 	it('deletes only obsolete Aurevia caches when the worker activates',async()=>{
-		const {listeners,caches,self}=loadServiceWorker({cacheKeys:['aurevia-static-v1','next-cache','other-app-cache','aurevia-static-v2']});
+		const {listeners,caches,self}=loadServiceWorker({cacheKeys:['aurevia-static-v1','aurevia-static-v2','next-cache','other-app-cache','aurevia-static-v3']});
 		let activation:Promise<unknown>|undefined;
 		listeners.get('activate')!({waitUntil:(value:unknown)=>{activation=value as Promise<unknown>}});
 		await activation;
-		expect(caches.delete).toHaveBeenCalledOnce();
+		expect(caches.delete).toHaveBeenCalledTimes(2);
 		expect(caches.delete).toHaveBeenCalledWith('aurevia-static-v1');
+		expect(caches.delete).toHaveBeenCalledWith('aurevia-static-v2');
 		expect(self.clients.claim).toHaveBeenCalledOnce();
 	});
 
