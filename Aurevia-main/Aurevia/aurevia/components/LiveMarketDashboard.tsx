@@ -21,7 +21,7 @@ type MarketAnalysis={summary:string;observations:Array<{symbol:string;observatio
 type MarketDataExplanation={symbol:string;dataType:'quote'|'history';status:'current_provider'|'stale_provider'|'internal_reference'|'unavailable';explanation:{explanation:string;recommendedAction:'refresh'|'configure_market_provider'|'try_later'|'contact_support';caveat:string}};
 type MarketCategory='Favorites'|'Forex'|'Crypto'|'Stocks'|'Indices';
 
-const TICKER_SYMBOLS=['BTC','DJI','MERV','DAX','IBEX','NIKKEI','EURGBP','SPX','NASDAQ'];
+const TICKER_SYMBOLS=['BTC','ETH','DJI','MERV','DAX','IBEX','NIKKEI','EURGBP','EURUSD','SPX','NASDAQ'];
 const MARKET_CATEGORIES:MarketCategory[]=['Favorites','Forex','Crypto','Stocks','Indices'];
 const marketTypeIcons:Record<string,LucideIcon>={INDEX:ChartNoAxesCombined,STOCK:Building2,FOREX:ArrowLeftRight,CRYPTO:Coins};
 

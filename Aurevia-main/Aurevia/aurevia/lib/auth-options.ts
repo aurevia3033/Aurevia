@@ -171,7 +171,7 @@ export const authOptions:NextAuthOptions={
       }
       const authenticatedUser=u;
       const accountAttemptKey=`credential-login-account:${authenticatedUser.id}`;
-      const usesConfiguredAdminPassword=!!authConfig.adminEmail&&lookupEmail.toLowerCase()===authConfig.adminEmail.toLowerCase();
+      const usesConfiguredAdminPassword=authenticatedUser.role===Role.ADMIN&&!!authConfig.adminEmail&&lookupEmail.toLowerCase()===authConfig.adminEmail.toLowerCase();
       const ok=usesConfiguredAdminPassword
         ?matchesConfiguredAdminPassword(passwordForAuthentication,authConfig.adminPassword)
         :await bcrypt.compare(passwordForAuthentication,authenticatedUser.passwordHash);

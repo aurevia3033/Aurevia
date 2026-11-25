@@ -30,7 +30,7 @@ vi.mock('@/lib/notifications',()=>({createNotification:mocks.notification}));
 vi.mock('@/lib/config/env',()=>({getServerConfiguration:()=>({marketData:{twelveDataApiKey:'test',twelveDataBaseUrl:'https://api.twelvedata.com',productionLicenseConfirmed:true}})}));
 vi.mock('@/lib/live-market',()=>({
 	getMarketAssetForTradingSymbol:vi.fn(()=>({id:'BTC',ticker:'BTC-USD',name:'Bitcoin USD',type:'CRYPTO',currency:'USD'})),
-	isExternalMarketDataSource:vi.fn((source:string)=>source==='Twelve Data'),
+	isMarketExecutionQuoteSource:vi.fn((source:string)=>['Twelve Data','Finnhub','Alpha Vantage','Financial Modeling Prep','Binance','CoinGecko','Frankfurter','Yahoo Finance','Stooq'].includes(source)),
 }));
 vi.mock('@/lib/market-data-service',()=>({
 	getAdditionalMarketProviderKeys:vi.fn(()=>({twelveDataApiKey:'test',twelveDataBaseUrl:'https://api.twelvedata.com',productionLicenseConfirmed:true})),
@@ -169,6 +169,26 @@ describe('REAL internal wallet-funded order placement',()=>{
 		await expect(placeRealOrder('user-1',input(),'provider-unavailable-key-001',{requireExpectedPriceMatch:true}))
 			.rejects.toThrow('MARKET_QUOTE_UNAVAILABLE');
 		expect(mocks.createOrder).not.toHaveBeenCalled();
+	});
+
+	it('accepts a fresh configured fallback provider quote for REAL placement',async()=>{
+		mocks.getQuote.mockResolvedValueOnce({
+			price:100,updatedAt:new Date(Date.now()-1_000).toISOString(),source:'Finnhub',isStale:false,
+		});
+
+		await placeRealOrder('user-1',input(),'finnhub-order-key-001',{requireExpectedPriceMatch:true});
+
+		expect(mocks.createOrder).toHaveBeenCalledOnce();
+	});
+
+	it('accepts a fresh free-provider quote for REAL placement',async()=>{
+		mocks.getQuote.mockResolvedValueOnce({
+			price:100,updatedAt:new Date(Date.now()-1_000).toISOString(),source:'CoinGecko',isStale:false,
+		});
+
+		await placeRealOrder('user-1',input(),'coingecko-order-key-001',{requireExpectedPriceMatch:true});
+
+		expect(mocks.createOrder).toHaveBeenCalledOnce();
 	});
 
 	it('returns a matching idempotent order without placing it twice',async()=>{

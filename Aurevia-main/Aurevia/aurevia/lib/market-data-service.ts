@@ -2,7 +2,7 @@ import {MarketDataError,TIMEFRAMES,type LiveMarketAsset,type MarketQuote,type Ti
 import type {ServerConfiguration} from '@/lib/config/env';
 import {getConfiguredMarketHistory,getConfiguredMarketIndicator,getConfiguredMarketQuote,getConfiguredMarketSearch,type MarketProviderKeys} from '@/lib/market-data/provider-manager';
 import type {TwelveDataIndicator} from '@/lib/providers/twelve-data-market-data';
-import {getFreeMarketHistory,getFreeMarketQuote} from '@/lib/free-market-quotes';
+import {getFreeMarketCryptoHistory,getFreeMarketHistory,getFreeMarketQuote} from '@/lib/free-market-quotes';
 
 const maximumFreshQuoteAgeMs=5*60_000;
 
@@ -55,6 +55,7 @@ async function quoteFromFreeProviders(asset:LiveMarketAsset):Promise<MarketQuote
 
 export async function getMarketQuoteWithFallback(asset:LiveMarketAsset,providers:MarketProviderKeys){
 	// 1) Configured paid/env providers
+	let staleQuote:MarketQuote|null=null;
 	try{
 		const quote=await getConfiguredMarketQuote(asset,providers);
 		if(quote){
@@ -62,11 +63,13 @@ export async function getMarketQuoteWithFallback(asset:LiveMarketAsset,providers
 			if(Number.isFinite(timestamp)){
 				const age=Date.now()-timestamp;
 				if(age>=-5_000){
-					return {
+					const normalized={
 						...quote,
 						isStale:age>maximumFreshQuoteAgeMs,
 						...(age>maximumFreshQuoteAgeMs?{staleReason:'Provider quote timestamp is older than five minutes.'}:{}),
 					};
+					if(!normalized.isStale)return normalized;
+					staleQuote=normalized;
 				}
 			}
 		}
@@ -74,7 +77,19 @@ export async function getMarketQuoteWithFallback(asset:LiveMarketAsset,providers
 
 	// 2) Free built-in providers (always on, no API keys)
 	const free=await quoteFromFreeProviders(asset);
-	if(free)return free;
+	if(free){
+		const timestamp=Date.parse(free.updatedAt);
+		const age=Date.now()-timestamp;
+		const isStale=free.isStale||!Number.isFinite(timestamp)||age < -5_000||age>maximumFreshQuoteAgeMs;
+		const normalized={
+			...free,
+			isStale,
+			...(isStale?{staleReason:free.staleReason||'Free provider quote is older than five minutes or has an invalid timestamp.'}:{}),
+		};
+		if(!isStale)return normalized;
+		if(!staleQuote||timestamp>Date.parse(staleQuote.updatedAt))staleQuote=normalized;
+	}
+	if(staleQuote)return staleQuote;
 
 	throw new MarketDataError('Configured market-data providers and free fallbacks could not return a usable quote.',503);
 }
@@ -97,6 +112,13 @@ export async function getMarketHistoryWithFallback(
 	}catch{/* free history */ }
 
 	const range=timeframe==='1m'||timeframe==='5m'||timeframe==='15m'?'5d':timeframe==='1y'?'1y':'1mo';
+	if(asset.type==='CRYPTO'){
+		const candles=await getFreeMarketCryptoHistory(asset.id,range);
+		if(candles.length){
+			const selection=TIMEFRAMES.find(item=>item.id===timeframe)??TIMEFRAMES[0];
+			return {quote:null,candles,timeframe,interval:selection.interval,source:'CoinGecko'};
+		}
+	}
 	for(const symbol of freeSymbolCandidates(asset)){
 		const candles=await getFreeMarketHistory(symbol, range);
 		if(candles.length){

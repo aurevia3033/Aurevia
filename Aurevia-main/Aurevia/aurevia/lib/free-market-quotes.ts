@@ -39,6 +39,7 @@ const CRYPTO_COINGECKO: Record<string, string> = {
 	DOGE: 'dogecoin', ADA: 'cardano', AVAX: 'avalanche-2', LINK: 'chainlink',
 	LTC: 'litecoin', MATIC: 'matic-network', DOT: 'polkadot', BNB: 'binancecoin', SHIB: 'shiba-inu',
 };
+const COINGECKO_HISTORY_DAYS:Record<string,string>={'5d':'7','1mo':'30','3mo':'90','1y':'365','5y':'max'};
 
 const FX_BASES = new Set(['EUR', 'GBP', 'JPY', 'CHF', 'CAD', 'AUD', 'NZD']);
 
@@ -241,6 +242,20 @@ export async function getFreeMarketHistory(symbol: string, range = '1mo'): Promi
 		});
 	}
 	return candles;
+}
+
+export async function getFreeMarketCryptoHistory(symbol:string,range='1mo'):Promise<FreeCandle[]>{
+	const id=CRYPTO_COINGECKO[normalizeSymbol(symbol)]||CRYPTO_COINGECKO[symbol.toUpperCase()];
+	const days=COINGECKO_HISTORY_DAYS[range];
+	if(!id||!days)return [];
+	const data=await fetchJson(`https://api.coingecko.com/api/v3/coins/${encodeURIComponent(id)}/ohlc?vs_currency=usd&days=${days}`,12_000);
+	if(!Array.isArray(data))return [];
+	return data.flatMap(row=>{
+		if(!Array.isArray(row)||row.length<5)return [];
+		const [timestamp,open,high,low,close]=row;
+		if(![timestamp,open,high,low,close].every(value=>typeof value==='number'&&Number.isFinite(value))||timestamp<=0||open<=0||high<=0||low<=0||close<=0)return [];
+		return [{time:Math.floor(timestamp/1000),open,high,low,close,volume:null}];
+	}).sort((left,right)=>left.time-right.time);
 }
 
 export async function probeFreeMarketProviders(): Promise<

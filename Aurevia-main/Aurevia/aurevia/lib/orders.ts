@@ -10,15 +10,13 @@ import {availableWalletAmount,getRealWalletReservations,lockRealWalletCurrencies
 import {LEGACY_EXTERNAL_PROVIDER} from '@/lib/bitcoin-funding';
 import {getServerConfiguration} from '@/lib/config/env';
 import {getAdditionalMarketProviderKeys,getMarketQuoteWithFallback} from '@/lib/market-data-service';
-import {getMarketAssetForTradingSymbol,isExternalMarketDataSource} from '@/lib/live-market';
+import {getMarketAssetForTradingSymbol,isMarketExecutionQuoteSource} from '@/lib/live-market';
 
 export type PlaceOrderInput={instrumentId:string;side:OrderSide;type:OrderType;quantity:number;price?:number;stopPrice?:number;expectedPrice:number;observedAt:string};
 
 export type ValidatedTwelveDataQuote={price:number;updatedAt:string};
 
-const FREE_EXECUTION_SOURCES=new Set(['Binance','CoinGecko','Frankfurter','Yahoo Finance','Stooq']);
-
-/** Resolve an executable mark: Twelve Data (preferred) or free built-in providers so REAL/DEMO trades work 24/7. */
+/** Resolve a fresh executable mark from a configured or keyless market-data provider. */
 export async function resolveTwelveDataExecutionQuote(symbol:string):Promise<ValidatedTwelveDataQuote>{
  const asset=getMarketAssetForTradingSymbol(symbol);
  if(!asset)throw new Error('MARKET_QUOTE_UNAVAILABLE');
@@ -29,16 +27,9 @@ export async function resolveTwelveDataExecutionQuote(symbol:string):Promise<Val
  }catch{
   throw new Error('MARKET_QUOTE_UNAVAILABLE');
  }
- const fromTwelve=quote.source==='Twelve Data'&&isExternalMarketDataSource(quote.source);
- const fromFree=FREE_EXECUTION_SOURCES.has(quote.source);
- if(!fromTwelve&&!fromFree)throw new Error('MARKET_QUOTE_UNAVAILABLE');
- if(fromTwelve&&quote.isStale)throw new Error('MARKET_QUOTE_UNAVAILABLE');
- if(fromTwelve)assertFreshQuote(quote.updatedAt);
- else{
-  // Free providers: allow marks up to 15 minutes so simulated REAL trading stays available
-  const age=Date.now()-Date.parse(quote.updatedAt);
-  if(!Number.isFinite(age)||age<-5_000||age>15*60_000)throw new Error('STALE_MARKET_QUOTE');
- }
+ if(!isMarketExecutionQuoteSource(quote.source))throw new Error('MARKET_QUOTE_UNAVAILABLE');
+ if(quote.isStale)throw new Error('MARKET_QUOTE_UNAVAILABLE');
+ assertFreshQuote(quote.updatedAt);
  if(!Number.isFinite(quote.price)||quote.price<=0)throw new Error('MARKET_QUOTE_UNAVAILABLE');
  return {price:quote.price,updatedAt:quote.updatedAt};
 }

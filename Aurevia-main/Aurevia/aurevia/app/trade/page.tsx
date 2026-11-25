@@ -4,7 +4,7 @@ import { useSession } from "next-auth/react";
 import dynamic from "next/dynamic";
 import Nav from "@/components/Nav";
 import { useLocale } from "@/lib/i18n-context";
-import {TIMEFRAMES,getMarketAssetForTradingSymbol,isExternalMarketDataSource,type MarketQuote,type TimeframeId} from "@/lib/live-market";
+import {TIMEFRAMES,getMarketAssetForTradingSymbol,isExternalMarketDataSource,isMarketExecutionQuoteSource,type MarketQuote,type TimeframeId} from "@/lib/live-market";
 import {normalizeDemoTradeCandles} from "@/lib/demo-trade-chart";
 import {createQuoteOnlyCandle} from "@/lib/chart-candles";
 import {marketHistoryCacheKey,readMarketHistoryCache,writeMarketHistoryCache,type MarketHistoryResponse} from "@/lib/market-history-cache";
@@ -52,7 +52,7 @@ type OrderBook={kind?:"SIMULATED_BOOK"|"TOP_OF_BOOK";bids?:OrderBookLevel[];asks
 type LiveQuotesResponse={quotes:Array<MarketQuote|{asset:MarketQuote['asset'];error:string}>};
 type MarketUpdate={symbol:string;price:number;change:number;changePercent:number;source:string;dataMode:'SIMULATED'|'LIVE';lastUpdatedAt:string};
 type TradeMessage={text:string;kind:'error'|'success'|'info'};
-const LIVE_TRADE_ASSET_IDS=["BTC","AAPL","MSFT","NVDA","AMZN","GOOGL","TSLA","DJI","SPX","NASDAQ"];
+const LIVE_TRADE_ASSET_IDS=["BTC","ETH","EURUSD","AAPL","MSFT","NVDA","AMZN","GOOGL","TSLA","DJI","SPX","NASDAQ"];
 const DEMO_CANDLE_RANGES:Record<TimeframeId,string>={ "1m":"1d","5m":"5d","15m":"1m","30m":"3m","1h":"1y","4h":"1y","1d":"max","1w":"max","1mo":"max",ytd:"max","1y":"max","5y":"max"};
 
 function normalizedSymbol(value:string){return value.toUpperCase().replace(/[^A-Z0-9]/g,"")}
@@ -77,7 +77,7 @@ async function loadTradingMarkets(mode:"DEMO"|"REAL",initialInstrumentResponse?:
     }catch{}
   }
   const availableQuotes=quotes.filter((quote):quote is MarketQuote=>{
-    if(!("price"in quote)||!Number.isFinite(quote.price)||quote.isStale||!isExternalMarketDataSource(quote.source))return false;
+    if(!("price"in quote)||!Number.isFinite(quote.price)||quote.isStale||!isMarketExecutionQuoteSource(quote.source))return false;
     const age=Date.now()-Date.parse(quote.updatedAt);
     return age<=30_000&&age>=-5_000;
   });

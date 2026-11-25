@@ -195,6 +195,36 @@ describe('credentials authorization',()=>{
 		expect(authMocks.securitySessionCreate).toHaveBeenCalledOnce();
 	});
 
+	it('authenticates a customer account with its own password even if its email matches the configured admin email',async()=>{
+		const password='CustomerPassword42';
+		authMocks.serverAuth={adminUsername:'administrator',adminEmail:'admin@example.invalid',adminPassword:'ConfiguredAdminPassword42!'};
+		authMocks.userFindFirst.mockResolvedValue({
+			id:'customer-1',email:'admin@example.invalid',name:'Customer',
+			passwordHash:await bcrypt.hash(password,4),role:'USER',accountMode:'DEMO',status:'ACTIVE',
+			activeSessionId:null,activeSessionUpdatedAt:null,
+		});
+
+		await expect(authorize({username:'admin@example.invalid',email:'admin@example.invalid',password})).resolves.toMatchObject({
+			id:'customer-1',email:'admin@example.invalid',role:'USER',
+		});
+		expect(authMocks.securitySessionCreate).toHaveBeenCalledOnce();
+	});
+
+	it('does not allow a customer account to enter through the dedicated admin sign-in form',async()=>{
+		const password='CustomerPassword42';
+		authMocks.serverAuth={adminUsername:'administrator',adminEmail:'admin@example.invalid',adminPassword:'ConfiguredAdminPassword42!'};
+		authMocks.userFindFirst.mockResolvedValue({
+			id:'customer-1',email:'admin@example.invalid',name:'Customer',
+			passwordHash:await bcrypt.hash(password,4),role:'USER',accountMode:'DEMO',status:'ACTIVE',
+			activeSessionId:null,activeSessionUpdatedAt:null,
+		});
+
+		await expect(authorize({
+			username:'admin@example.invalid',email:'admin@example.invalid',password,adminLogin:'true',
+		})).resolves.toBeNull();
+		expect(authMocks.securitySessionCreate).not.toHaveBeenCalled();
+	});
+
 	it('accepts a correct password with leading or trailing spaces',async()=>{
 		const password=' CorrectPassword42 ';
 		authMocks.userFindFirst.mockResolvedValue({

@@ -19,6 +19,7 @@ function applyTheme(theme:Theme){
 	document.documentElement.dataset.themeName=theme;
 	document.documentElement.dataset.theme=theme==='premium-dashboard'?'light':'dark';
 	document.documentElement.style.colorScheme=theme==='premium-dashboard'?'light':'dark';
+	document.documentElement.style.backgroundColor=theme==='premium-dashboard'?'#F7F8F5':'#07110D';
 	const themeColor=document.querySelector<HTMLMetaElement>('meta[name="theme-color"]');
 	if(themeColor)themeColor.content=theme==='premium-dashboard'?'#F7F8F5':'#07110D';
 	window.dispatchEvent(new CustomEvent('aurevia-theme-change',{detail:theme}));

@@ -266,6 +266,7 @@ test('site theme preference switches globally and persists across navigation and
 	const themeToggle=page.locator('#user-more-menu').getByRole('button',{name:'Premium Dashboard'});
 	await themeToggle.click();
 	await expect(page.locator('html')).toHaveAttribute('data-theme-name','premium-dashboard');
+	await expect.poll(()=>page.locator('html').evaluate(element=>(element as HTMLElement).style.backgroundColor)).toBe('rgb(247, 248, 245)');
 	await expect(page.locator('body')).toHaveCSS('background-color','rgb(247, 248, 245)');
 	await page.goto('/dashboard');
 	await expect(page.locator('html')).toHaveAttribute('data-theme-name','premium-dashboard');
@@ -277,6 +278,7 @@ test('site theme preference switches globally and persists across navigation and
 		await expect(secondPage.locator('html')).toHaveAttribute('data-theme-name','premium-dashboard');
 		await secondPage.getByRole('button',{name:'Forest Green'}).click();
 		await expect(secondPage.locator('html')).toHaveAttribute('data-theme-name','forest-green');
+		await expect.poll(()=>secondPage.locator('html').evaluate(element=>(element as HTMLElement).style.backgroundColor)).toBe('rgb(7, 17, 13)');
 	}finally{await secondDevice.close();}
 });
 

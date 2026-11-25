@@ -51,6 +51,8 @@ export const MARKET_ASSETS:LiveMarketAsset[]=[
 	{id:'MERV',ticker:'^MERV',name:'S&P Merval',type:'INDEX',currency:'ARS'},
 	{id:'EURGBP',ticker:'EURGBP=X',name:'Euro / British Pound',type:'FOREX',currency:'GBP'},
 	{id:'BTC',ticker:'BTC-USD',name:'Bitcoin USD',type:'CRYPTO',currency:'USD'},
+	{id:'ETH',ticker:'ETH-USD',name:'Ethereum USD',type:'CRYPTO',currency:'USD'},
+	{id:'EURUSD',ticker:'EURUSD=X',name:'Euro / US Dollar',type:'FOREX',currency:'USD'},
 	{id:'AAPL',ticker:'AAPL',name:'Apple Inc.',type:'STOCK',currency:'USD'},
 	{id:'MSFT',ticker:'MSFT',name:'Microsoft Corporation',type:'STOCK',currency:'USD'},
 	{id:'NVDA',ticker:'NVDA',name:'NVIDIA Corporation',type:'STOCK',currency:'USD'},
@@ -59,7 +61,7 @@ export const MARKET_ASSETS:LiveMarketAsset[]=[
 	{id:'TSLA',ticker:'TSLA',name:'Tesla, Inc.',type:'STOCK',currency:'USD'},
 ];
 
-export const DEFAULT_WATCHLIST=['DJI','SPX','NASDAQ','DAX','NIKKEI','BTC','EURGBP','IBEX','MERV'];
+export const DEFAULT_WATCHLIST=['DJI','SPX','NASDAQ','DAX','NIKKEI','BTC','ETH','EURGBP','EURUSD','IBEX','MERV'];
 export const COMPARISON_SYMBOLS=['SPX','NASDAQ','SP100','NDX'];
 
 export const TIMEFRAMES=[
@@ -109,6 +111,10 @@ export function getMarketAssetForTradingSymbol(symbol:string){
 
 export function isExternalMarketDataSource(source:string){
 	return source==='Twelve Data'||source==='Finnhub'||source==='Alpha Vantage'||source==='Financial Modeling Prep';
+}
+
+export function isMarketExecutionQuoteSource(source:string){
+	return isExternalMarketDataSource(source)||['Binance','CoinGecko','Frankfurter','Yahoo Finance','Stooq'].includes(source);
 }
 
 export function filterSupportedMarketAssets<T extends {symbol:string}>(assets:T[]){
