@@ -269,6 +269,17 @@ test('current terms acceptance is explicit and persists across refresh, login, a
 	}
 });
 
+test('homepage remains visible while signed-in users review required terms',async({page})=>{
+	const user=await createIsolatedDemoUser('terms-homepage-visible',{acceptTerms:false});
+	await loginAs(page,user.email,user.password,{acceptTerms:false});
+	await expect(page.getByRole('dialog',{name:'Review required legal documents'})).toBeVisible();
+
+	await page.goto('/');
+	await expect(page.locator('.home-hero h1').first()).toBeVisible();
+	await expect(page.locator('.policy-consent-checking')).toHaveCount(0);
+	await expect(page.getByRole('dialog',{name:'Review required legal documents'})).toBeVisible();
+});
+
 test('updated terms require a separate acceptance and preserve the previous version',async({page})=>{
 	const user=await createIsolatedDemoUser('terms-updated-version',{acceptTerms:false});
 	const userId=(await db.user.findUniqueOrThrow({where:{email:user.email},select:{id:true}})).id;

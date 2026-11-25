@@ -51,8 +51,9 @@ export default function PolicyConsentGate({children,initialUserId}:{children:Rea
 	const userId=session?.user?.id;
 	const eligible=status==='authenticated'&&(session?.user?.role==='USER'||session?.user?.role==='ADMIN')&&Boolean(userId)&&!policyPaths.has(pathname);
 	const checkingSession=status==='loading'&&Boolean(initialUserId)&&!policyPaths.has(pathname);
+	const isPublicLandingPage=pathname==='/';
 	const visible=eligible&&(state==='required'||state==='error');
-	const blockContent=checkingSession||eligible&&state!=='accepted';
+	const blockContent=!isPublicLandingPage&&(checkingSession||eligible&&state!=='accepted');
 
 	useEffect(()=>{
 		if(!eligible||!userId){
@@ -140,7 +141,7 @@ export default function PolicyConsentGate({children,initialUserId}:{children:Rea
 
 	return <>
 		{!blockContent&&children}
-		{(checkingSession||eligible&&state==='checking'&&!deviceAcceptanceKnown)&&<p className="policy-consent-checking" role="status">{checkingSession?'Restoring your authenticated session…':'Checking your current legal acceptance…'}</p>}
+		{(!isPublicLandingPage&&(checkingSession||eligible&&state==='checking'&&!deviceAcceptanceKnown))&&<p className="policy-consent-checking" role="status">{checkingSession?'Restoring your authenticated session…':'Checking your current legal acceptance…'}</p>}
 		<dialog
 		ref={dialogRef}
 		className="policy-consent-dialog"

@@ -269,6 +269,14 @@ test.afterEach(async({page},testInfo)=>{
 			||title.includes('KYC access is owner-scoped')&&url.endsWith('/api/kyc/documents')&&status===409;
 	})];
 	const expectedTermsDenials=testInfo.title.includes('current terms acceptance')?capture.failedResponses.filter(response=>response.url.endsWith('/api/theme-preference')&&response.status===403):[];
+	const expectedLandingConsentDenials=testInfo.title.includes('homepage remains visible while signed-in users review required terms')
+		?capture.failedResponses.filter(response=>response.status===403&&[
+			'/api/language-preference',
+			'/api/theme-preference',
+			'/api/notifications',
+			'/api/support',
+		].includes(new URL(response.url).pathname))
+		:[];
 	if(testInfo.title.includes('support fallback'))expectedClientErrors.push(...capture.failedResponses.filter(response=>response.url.endsWith('/api/support/nova')&&response.status===503));
 	if(testInfo.title.includes('account deletion'))expectedClientErrors.push(...capture.failedResponses.filter(response=>(response.url.endsWith('/api/profile')&&response.status===403)||(response.url.endsWith('/api/dashboard/overview')&&[401,403].includes(response.status))));
 	if(testInfo.title.includes('account deletion'))expectedClientErrors.push(...capture.failedResponses.filter(response=>response.url.endsWith('/api/notifications?limit=100')&&response.status===401));
@@ -277,7 +285,7 @@ test.afterEach(async({page},testInfo)=>{
 		const route=new URL(response.url).pathname;
 		return route==='/api/cards/theme-id'&&response.status===404||route==='/api/funding/theme-id'&&response.status===404||route==='/api/tax-services/cases/theme-id'&&response.status===403;
 	}):[];
-	const unexpectedResponses=capture.failedResponses.filter(response=>!expectedClientErrors.includes(response)&&!expectedSyntheticRouteFailures.includes(response)&&!expectedTermsDenials.includes(response));
+	const unexpectedResponses=capture.failedResponses.filter(response=>!expectedClientErrors.includes(response)&&!expectedSyntheticRouteFailures.includes(response)&&!expectedTermsDenials.includes(response)&&!expectedLandingConsentDenials.includes(response));
 	const accountClosureAccessDenied=testInfo.title.includes('account deletion')&&capture.failedResponses.some(response=>(response.url.endsWith('/api/profile')&&[401,403].includes(response.status))||(response.url.endsWith('/api/dashboard/overview')&&[401,403].includes(response.status)));
 	const accountClosureProfileDenied=testInfo.title.includes('account deletion')&&capture.failedResponses.some(response=>response.url.endsWith('/api/profile')&&[401,403].includes(response.status));
 	let remainingExpectedFallbackErrors=expectedFallbackResponse.length;
@@ -287,8 +295,8 @@ test.afterEach(async({page},testInfo)=>{
 	let remainingSyntheticForbiddenErrors=expectedSyntheticRouteFailures.filter(response=>response.status===403).length;
 	const cancelledConsoleErrors=new Map(cancelledTargets);
 	const appHost=new URL(appOrigin).host;
-	let remainingTermsForbiddenErrors=expectedTermsDenials.length;
-	let remainingExpectedThemeErrors=expectedTermsDenials.length;
+	let remainingTermsForbiddenErrors=expectedTermsDenials.length+expectedLandingConsentDenials.length;
+	let remainingExpectedThemeErrors=expectedTermsDenials.length+expectedLandingConsentDenials.filter(response=>response.url.endsWith('/api/theme-preference')).length;
 	const unexpectedConsoleErrors=capture.consoleErrors.filter(message=>{
 		const cancelledTarget=cancelledFetchConsoleTarget(message);
 		if(cancelledTarget&&consumeCancelledTarget(cancelledConsoleErrors,`${appHost}${cancelledTarget}`))return false;
