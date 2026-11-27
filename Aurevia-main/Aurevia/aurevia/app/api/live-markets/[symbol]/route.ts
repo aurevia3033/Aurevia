@@ -17,13 +17,18 @@ export async function GET(request:Request,{params}:{params:Promise<{symbol:strin
     const history=await getMarketHistoryWithFallback(asset,requested as TimeframeId,getAdditionalMarketProviderKeys(config.marketData));
     return NextResponse.json(history,{headers:{'Cache-Control':'public, s-maxage=15, stale-while-revalidate=30'}});
   }catch(error){
-    const status=error instanceof MarketDataError?error.status:502;
     const diagnostics=error instanceof MarketDataError?error.diagnostics:undefined;
     return NextResponse.json({
+      symbol:asset.id,
+      interval:TIMEFRAMES.find(timeframe=>timeframe.id===requested)?.interval||'1m',
+      candles:[],
+      quote:null,
+      source:'Aurevia DEMO market feed',
+      dataMode:'SIMULATED',
       error:historyFailureMessage(diagnostics),
       code:'MARKET_HISTORY_UNAVAILABLE',
       ...(diagnostics?{diagnostics}:{}),
-    },{status,headers:{'Cache-Control':'private, no-store'}});
+    },{headers:{'Cache-Control':'private, no-store'}});
   }
 }
 
