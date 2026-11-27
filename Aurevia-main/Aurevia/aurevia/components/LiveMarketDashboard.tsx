@@ -237,7 +237,7 @@ function LiveMarketDashboardContent(){
   return <><Nav/><main className="live-market-page">
     <div className="live-market-topline">
       <div className="live-market-heading"><span>GLOBAL MARKETS <i/> {activeQuoteIsExternal&&!activeQuote?.isStale?'CURRENT QUOTE':activeQuote?'INDICATIVE PRICES':'QUOTE UNAVAILABLE'}</span><h1>Markets</h1><p>Market prices may be delayed and indicative. Final prices are confirmed when orders execute.</p></div>
-      <div className={`live-source-status ${activeQuote?.isStale?'is-stale':''} ${activeQuoteIsExternal&&!activeQuote?.isStale?'is-live':''} ${activeQuote&&!activeQuoteIsExternal?'is-internal':''}`}><span className="live-status-dot"/>{`Price status: ${activeQuoteStatus}`} <small>{activeQuote?`Updated ${formatTime(activeQuote.updatedAt)}`:'Market prices are temporarily unavailable'}</small></div>
+      <div className={`live-source-status ${activeQuote?.isStale?'is-stale':''} ${activeQuoteIsExternal&&!activeQuote?.isStale?'is-live':''} ${activeQuote&&!activeQuoteIsExternal?'is-internal':''}`}><span className="live-status-dot"/>{`Price status: ${activeQuoteStatus}`} <small>{activeQuote?`${activeQuote.isStale?'Last quote':'Updated'} ${formatTime(activeQuote.updatedAt)}${activeQuote.isStale?` · ${formatAge(activeQuote.updatedAt)} old`:''}`:'Market prices are temporarily unavailable'}</small></div>
     </div>
 
     <section className="live-ticker" aria-label="Market ticker">
@@ -451,6 +451,13 @@ function formatPrice(value:number,currency:string,forex=false){
 function formatPercent(value:number){return `${value>=0?'+':''}${value.toFixed(2)}%`}
 function formatCompact(value:number){return new Intl.NumberFormat('en-US',{notation:'compact',maximumFractionDigits:2}).format(value)}
 function formatTime(value:string){return new Date(value).toLocaleTimeString('en-US',{hour:'2-digit',minute:'2-digit',second:'2-digit'})}
+function formatAge(value:string){
+  const age=Math.max(0,Date.now()-Date.parse(value));
+  if(!Number.isFinite(age))return 'age unavailable';
+  if(age<60_000)return `${Math.max(1,Math.floor(age/1_000))}s`;
+  if(age<3_600_000)return `${Math.floor(age/60_000)}m`;
+  return `${Math.floor(age/3_600_000)}h`;
+}
 function tone(value:number){return value>=0?'is-positive':'is-negative'}
 function marketTypeLabel(type:string){return ({INDEX:'INDEX',STOCK:'STOCK',FOREX:'FOREX',CRYPTO:'CRYPTO'})[type as 'INDEX'|'STOCK'|'FOREX'|'CRYPTO']||type}
 function marketOpenLabel(type:string){return type==='CRYPTO'?'Market open 24/7':'Market · latest available session'}

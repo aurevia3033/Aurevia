@@ -175,7 +175,12 @@ test.beforeEach(async({page},testInfo)=>{
 		const expectedAssistantFailure=testInfo.title.includes('support fallback')&&message.text().includes('503 (Service Unavailable)');
 		const expectedUnavailableMarket=!marketProviderConfigured&&message.text().includes('503 (Service Unavailable)');
 		const expectedDuplicateRegistration=testInfo.title.includes('duplicate signup offers sign-in')&&message.text().includes('status of 409 (Conflict)');
-		const expectedServiceWorkerFailure=testInfo.title.includes('browser notification settings report service worker registration failures')&&message.text().includes('Service worker registration failed');
+		const expectedServiceWorkerFailure=(
+			testInfo.title.includes('browser notification settings report service worker registration failures')
+			||testInfo.title.includes('homepage testimonial profile stays visible')
+			||testInfo.title.includes('homepage clearly shows simulated DEMO prices')
+			||testInfo.title.includes('site theme preference switches globally')
+		)&&message.text().includes('Service worker registration failed');
 		if(message.type()==='error'&&!message.text().includes('status of 400 (Bad Request)')&&!message.text().includes('status of 401 (Unauthorized)')&&!expectedFundingFailure&&!expectedAssistantFailure&&!expectedUnavailableMarket&&!expectedDuplicateRegistration&&!expectedServiceWorkerFailure){
 			capture.consoleErrors.push(message.text());
 			const source=message.location().url;

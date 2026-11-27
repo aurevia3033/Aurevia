@@ -1,14 +1,13 @@
 {
   "name": "Aurevia Exchange",
   "short_name": "Aurevia",
-  "description": "Aurevia Exchange — secure digital banking, trading and investing on Android and desktop.",
+  "description": "Aurevia Exchange — your secure digital markets workspace.",
   "id": "/",
   "start_url": "/",
   "scope": "/",
   "display": "standalone",
   "background_color": "#07110D",
   "theme_color": "#07110D",
-  "orientation": "portrait-primary",
   "categories": ["finance", "business", "productivity"],
   "icons": [
     {

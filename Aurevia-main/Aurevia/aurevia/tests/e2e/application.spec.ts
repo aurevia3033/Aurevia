@@ -124,8 +124,7 @@ async function completeRegistrationToReview(page:Page,options:{email:string;firs
 	await page.getByLabel(/Street address/).fill('123 Test Street');
 	await page.getByRole('button',{name:'Continue'}).click();
 	await page.getByLabel('Email address').fill(options.email);
-	await page.getByRole('button',{name:'Continue'}).click();
-	await page.getByRole('radio',{name:/DEMO account/i}).check();
+	await page.getByLabel('Account mode').selectOption('DEMO');
 	await page.getByRole('button',{name:'Continue'}).click();
 	await page.getByLabel(/^Password/).fill('SecureTestPassword1');
 	await page.getByLabel(/^Confirm password/).fill('SecureTestPassword1');
@@ -839,8 +838,7 @@ test('login and registration fields receive real pointer and keyboard input',asy
 	await page.getByLabel(/Street address/).fill('123 Test Street');
 	await page.getByRole('button',{name:'Continue'}).click();
 	await typeInto(page,page.getByLabel('Email address'),'input-test@example.test');
-	await page.getByRole('button',{name:'Continue'}).click();
-	await page.getByRole('radio',{name:/DEMO account/i}).check();
+	await page.getByLabel('Account mode').selectOption('DEMO');
 	await page.getByRole('button',{name:'Continue'}).click();
 	const registrationPassword=page.getByLabel(/^Password/);
 	await typeInto(page,registrationPassword,'ValidPassword123!');
@@ -1793,8 +1791,41 @@ test('sign-in returns to the protected dashboard requested before authentication
 	await page.getByRole('button',{name:'Sign in'}).click();
 	await page.waitForURL(url=>url.pathname==='/dashboard');
 	expect(await page.evaluate(()=>performance.timeOrigin)).toBe(documentTimeOrigin);
-	expect(await page.evaluate(()=>localStorage.getItem('aurevia-signin-remembered-email'))).toBe(fixture('LEGACY_USER_EMAIL'));
 	await expect(page.getByRole('heading',{name:'My Portfolio'})).toBeVisible();
+	const rememberedEmailStorage=await page.evaluate(async()=>{
+		const database=await new Promise<IDBDatabase>((resolve,reject)=>{
+			const request=indexedDB.open('aurevia-encrypted-local-data',1);
+			request.onsuccess=()=>resolve(request.result);
+			request.onerror=()=>reject(request.error);
+		});
+		try{
+			const transaction=database.transaction(['encryption-keys','encrypted-values'],'readonly');
+			const [key,record]=await Promise.all([
+				new Promise<{key:CryptoKey}|undefined>((resolve,reject)=>{
+					const request=transaction.objectStore('encryption-keys').get('device-aes-256-gcm');
+					request.onsuccess=()=>resolve(request.result as {key:CryptoKey}|undefined);
+					request.onerror=()=>reject(request.error);
+				}),
+				new Promise<{iv:number[];ciphertext:ArrayBuffer}|undefined>((resolve,reject)=>{
+					const request=transaction.objectStore('encrypted-values').get('aurevia-signin-remembered-email');
+					request.onsuccess=()=>resolve(request.result as {iv:number[];ciphertext:ArrayBuffer}|undefined);
+					request.onerror=()=>reject(request.error);
+				}),
+			]);
+			return {
+				plaintext:localStorage.getItem('aurevia-signin-remembered-email'),
+				keyExtractable:key?.key.extractable,
+				ivLength:record?.iv.length,
+				ciphertext:Array.from(new Uint8Array(record?.ciphertext||new ArrayBuffer(0))),
+			};
+		}finally{database.close()}
+	});
+	expect(rememberedEmailStorage.plaintext).toBeNull();
+	expect(rememberedEmailStorage.keyExtractable).toBe(false);
+	expect(rememberedEmailStorage.ivLength).toBe(12);
+	expect(new TextDecoder().decode(new Uint8Array(rememberedEmailStorage.ciphertext))).not.toContain(fixture('LEGACY_USER_EMAIL'));
+	await page.goto('/login');
+	await expect(page.getByLabel('Email address')).toHaveValue(fixture('LEGACY_USER_EMAIL'));
 });
 
 test('administrator sign-in returns to the protected admin page requested before authentication',async({page})=>{

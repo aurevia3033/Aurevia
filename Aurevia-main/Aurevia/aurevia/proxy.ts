@@ -8,6 +8,9 @@ const isProtectedRoute=(pathname:string)=>protectedRoutes.some(route=>pathname==
 export default withAuth(function middleware(request:NextRequestWithAuth){
 	const role=request.nextauth.token?.role;
 	const pathname=request.nextUrl.pathname;
+	const requestHeaders=new Headers(request.headers);
+	requestHeaders.delete('x-aurevia-public-landing');
+	if(pathname==='/')requestHeaders.set('x-aurevia-public-landing','1');
 	const destination=`${pathname}${request.nextUrl.search}`;
 	const isWebhookOrCron=pathname.startsWith('/api/cron/')||pathname.startsWith('/api/webhooks/');
 	if(!isWebhookOrCron&&['POST','PUT','PATCH','DELETE'].includes(request.method)){
@@ -29,7 +32,7 @@ export default withAuth(function middleware(request:NextRequestWithAuth){
 		loginUrl.searchParams.set('callbackUrl',destination);
 		return NextResponse.redirect(loginUrl);
 	}
-	return NextResponse.next();
+	return NextResponse.next({request:{headers:requestHeaders}});
 },{callbacks:{authorized:()=>true}});
 
 export const config={matcher:['/((?!api|_next/static|_next/image|favicon.ico|.*\\..*).*)','/api/:path*']};

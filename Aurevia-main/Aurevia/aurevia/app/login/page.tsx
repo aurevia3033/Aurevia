@@ -10,6 +10,7 @@ import Nav from '@/components/Nav';
 import StatusNotice from '@/components/StatusNotice';
 import {useLocale} from '@/lib/i18n-context';
 import {safeInternalPath} from '@/lib/navigation';
+import {getEncryptedLocalValue,removeEncryptedLocalValue,setEncryptedLocalValue} from '@/lib/encrypted-local-storage';
 
 const rememberedEmailKey='aurevia-signin-remembered-email';
 
@@ -21,6 +22,7 @@ export default function Login(){
 	const [rememberEmail,setRememberEmail]=useState(false);
 	const [passwordVisible,setPasswordVisible]=useState(false);
 	const [error,setError]=useState('');
+	const [storageNotice,setStorageNotice]=useState('');
 	const [registered,setRegistered]=useState(false);
 	const [loginSuccess,setLoginSuccess]=useState(false);
 	const [callbackUrl,setCallbackUrl]=useState('/dashboard');
@@ -29,26 +31,46 @@ export default function Login(){
 
 	useEffect(()=>{
 		const query=new URLSearchParams(window.location.search);
-		let rememberedEmail='';
-		try{rememberedEmail=window.localStorage.getItem(rememberedEmailKey)||''}
-		catch(error){console.warn('Unable to read the remembered sign-in email.',{errorName:error instanceof Error?error.name:'UnknownError'})}
-		try{
-			const registrationEmail=window.sessionStorage.getItem('aurevia-signin-email');
+		let active=true;
+		void (async()=>{
+			let registrationEmail='';
+			let legacyEmail='';
+			try{
+				registrationEmail=window.sessionStorage.getItem('aurevia-signin-email')||'';
+				if(registrationEmail)window.sessionStorage.removeItem('aurevia-signin-email');
+			}catch(error){
+				console.warn('Unable to restore the registration email for sign-in.',{errorName:error instanceof Error?error.name:'UnknownError'});
+			}
+			try{
+				legacyEmail=window.localStorage.getItem(rememberedEmailKey)||'';
+				if(legacyEmail)window.localStorage.removeItem(rememberedEmailKey);
+			}catch(error){
+				console.warn('Unable to migrate the remembered sign-in email.',{errorName:error instanceof Error?error.name:'UnknownError'});
+			}
+			let rememberedEmail='';
+			try{
+				rememberedEmail=await getEncryptedLocalValue(rememberedEmailKey)||'';
+				if(!rememberedEmail&&legacyEmail){
+					await setEncryptedLocalValue(rememberedEmailKey,legacyEmail);
+					rememberedEmail=legacyEmail;
+				}
+			}catch(error){
+				console.warn('Secure remembered-email storage is unavailable.',{errorName:error instanceof Error?error.name:'UnknownError'});
+				if(legacyEmail)rememberedEmail=legacyEmail;
+				if(active)setStorageNotice('Secure device storage is unavailable. You can still sign in, but your email will not be remembered.');
+			}
+			if(!active)return;
 			if(registrationEmail){
 				setIdentifier(registrationEmail);
 				setRememberEmail(false);
-				window.sessionStorage.removeItem('aurevia-signin-email');
 			}else if(rememberedEmail){
 				setIdentifier(rememberedEmail);
 				setRememberEmail(true);
 			}
-		}catch(error){
-			console.warn('Unable to restore the registration email for sign-in.',{
-				errorName:error instanceof Error?error.name:'UnknownError',
-			});
-		}
+		})();
 		setRegistered(query.get('registered')==='1');
 		setCallbackUrl(safeInternalPath(query.get('callbackUrl')||'/dashboard','/dashboard',window.location.origin));
+		return()=>{active=false};
 	},[]);
 
 	async function submit(event:FormEvent<HTMLFormElement>){
@@ -57,9 +79,13 @@ export default function Login(){
 			const result=await signIn('credentials',{username:identifier,email:identifier,password,redirect:false});
 			if(result?.ok){
 				try{
-					if(rememberEmail)localStorage.setItem(rememberedEmailKey,identifier.trim());
-					else localStorage.removeItem(rememberedEmailKey);
-				}catch(storageError){console.warn('Unable to save the remembered sign-in email.',{errorName:storageError instanceof Error?storageError.name:'UnknownError'})}
+					if(rememberEmail)await setEncryptedLocalValue(rememberedEmailKey,identifier.trim());
+					else await removeEncryptedLocalValue(rememberedEmailKey);
+					setStorageNotice('');
+				}catch(storageError){
+					console.warn('Unable to securely save the remembered sign-in email.',{errorName:storageError instanceof Error?storageError.name:'UnknownError'});
+					setStorageNotice('Secure device storage is unavailable. Your sign-in succeeded, but your email was not remembered.');
+				}
 				try{await update()}catch(error){console.error('Session refresh after sign-in failed.',error instanceof Error?error.name:'UnknownError')}
 				setLoginSuccess(true);
 				await new Promise<void>(resolve=>window.setTimeout(resolve,900));
@@ -102,10 +128,13 @@ export default function Login(){
 					const checked=event.target.checked;
 					setRememberEmail(checked);
 					if(!checked){
-						try{localStorage.removeItem(rememberedEmailKey)}
-						catch(storageError){console.warn('Unable to clear the remembered sign-in email.',{errorName:storageError instanceof Error?storageError.name:'UnknownError'})}
+						void removeEncryptedLocalValue(rememberedEmailKey).catch(storageError=>{
+							console.warn('Unable to clear the encrypted remembered sign-in email.',{errorName:storageError instanceof Error?storageError.name:'UnknownError'});
+							setStorageNotice('The remembered email could not be removed from secure device storage.');
+						});
 					}
 				}}/><span>Remember my email on this device</span></label><Link className="auth-link" href="/forgot-password">{translate('forgotPassword')}</Link></div>
+				{storageNotice&&<p className="text-sm text-amber-300" role="status">{storageNotice}</p>}
 				{error&&<StatusNotice tone={error==='Sign-in details are incorrect.'?'declined':'neutral'} title={error==='Sign-in details are incorrect.'?'Sign-in details not accepted':'Sign-in could not be completed'} description={error} role="alert"/>}
 				<button type="submit" disabled={busy} className="auth-submit flex w-full items-center justify-center gap-2" aria-busy={busy}>{busy?<><LoaderCircle size={16} className="animate-spin" aria-hidden="true"/>{loginSuccess?'Opening account…':translate('loading')}</> : translate('signIn')}</button>
 			</form>

@@ -132,6 +132,8 @@ test('homepage keeps Stories in navigation and off the landing content',async({p
 	await expect(page.getByRole('dialog',{name:'More'}).getByRole('link',{name:'Stories',exact:true})).toHaveAttribute('href','/stories');
 });
 
+test.describe('mocked testimonial API response',()=>{
+test.use({serviceWorkers:'block'});
 test('homepage testimonial profile stays visible when its portrait is unavailable',async({page})=>{
 	await page.route('**/api/client-stories',route=>route.fulfill({
 		status:200,
@@ -145,6 +147,7 @@ test('homepage testimonial profile stays visible when its portrait is unavailabl
 	await expect(profile.getByText('I can review my account in one place.')).toBeVisible();
 	await profile.scrollIntoViewIfNeeded();
 	await expect(profile.locator('.client-story-monogram')).toHaveText('S');
+});
 });
 
 test('public navigation is balanced in the desktop header and remains accessible on mobile',async({page})=>{
@@ -162,6 +165,79 @@ test('public navigation is balanced in the desktop header and remains accessible
 	await expect(websiteNavigation).toBeHidden();
 	await expect(page.getByRole('button',{name:'Open navigation'})).toBeVisible();
 	await expectNoHorizontalOverflow(page);
+});
+
+test('homepage renders for signed-out and signed-in visitors on desktop and mobile',async({browser})=>{
+	test.setTimeout(300_000);
+	for(const authenticated of [false,true]){
+		for(const viewport of [{width:1440,height:900},{width:390,height:844}]){
+			const context=await browser.newContext({viewport});
+			try{
+				const page=await context.newPage();
+				if(authenticated)await loginAs(page,fixture('USER_EMAIL'),fixture('USER_PASSWORD'));
+				const response=await page.goto('/');
+				expect(response?.status()).toBe(200);
+				await expect(page.locator('.home-hero h1').first()).toBeVisible();
+				await expectNoHorizontalOverflow(page);
+			}finally{
+				await context.close();
+			}
+		}
+	}
+});
+
+test('PWA metadata is valid and an offline navigation displays a clear fallback',async({page})=>{
+	const fatalErrors:string[]=[];
+	page.on('pageerror',error=>fatalErrors.push(error.message));
+	page.on('console',message=>{
+		if(message.type()==='error'&&/Content Security Policy|Refused to/.test(message.text()))fatalErrors.push(message.text());
+	});
+	const manifestResponse=await page.request.get('/manifest.webmanifest');
+	expect(manifestResponse.ok()).toBe(true);
+	expect(await manifestResponse.json()).toMatchObject({
+		name:'Aurevia Exchange',
+		short_name:'Aurevia',
+		start_url:'/',
+		display:'standalone',
+		theme_color:'#07110D',
+	});
+	const offlineResponse=await page.request.get('/offline.html');
+	expect(offlineResponse.ok()).toBe(true);
+
+	for(const viewport of [{width:390,height:844},{width:412,height:915},{width:1365,height:900}]){
+		await page.setViewportSize(viewport);
+		await page.goto('/');
+		await expect(page.locator('.home-hero h1').first()).toBeVisible();
+		await expectNoHorizontalOverflow(page);
+	}
+	await page.evaluate(()=>navigator.serviceWorker.ready);
+	await expect.poll(()=>page.evaluate(()=>Boolean(navigator.serviceWorker.controller))).toBe(true);
+	await page.context().setOffline(true);
+	await page.goto('/dashboard');
+	await expect(page.getByRole('heading',{name:'You’re offline'})).toBeVisible();
+	await expect(page.getByText('Live prices, balances, transactions, and account details are not available offline.')).toBeVisible();
+	expect(fatalErrors).toEqual([]);
+});
+
+test('mobile install guidance uses iOS Add to Home Screen and Android install options',async({browser})=>{
+	const userAgents=[
+		{userAgent:'Mozilla/5.0 (iPhone; CPU iPhone OS 17_0 like Mac OS X) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/17.0 Mobile/15E148 Safari/604.1',heading:'Add Aurevia to your Home Screen',instruction:'In Safari, tap Share, choose “Add to Home Screen”, then tap Add.'},
+		{userAgent:'Mozilla/5.0 (Linux; Android 14; Pixel 8) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/125.0.0.0 Mobile Safari/537.36',heading:'Install Aurevia App',instruction:'Install Aurevia for a standalone app experience on this device.'},
+	];
+	for(const device of userAgents){
+		const context=await browser.newContext({userAgent:device.userAgent,viewport:{width:390,height:844}});
+		try{
+			const page=await context.newPage();
+			await page.goto('/');
+			const installDialog=page.getByRole('dialog',{name:'Install Aurevia App'});
+			await expect(installDialog.getByText(device.heading)).toBeVisible();
+			await expect(installDialog.getByText(device.instruction)).toBeVisible();
+			if(device.heading==='Install Aurevia App'){
+				await installDialog.getByRole('button',{name:'Options'}).click();
+				await expect(installDialog).toContainText('Open your browser menu');
+			}
+		}finally{await context.close()}
+	}
 });
 
 test('slow page navigation keeps the current page usable with the standard loading indicator',async({page})=>{
@@ -221,6 +297,8 @@ test('terms and privacy policies remain readable to signed-out visitors',async({
 	await expect(page.locator('.policy-consent-dialog')).toBeHidden();
 });
 
+test.describe('mocked homepage market APIs',()=>{
+test.use({serviceWorkers:'block'});
 test('homepage clearly shows simulated DEMO prices when live providers are unavailable',async({page})=>{
 	await page.route('**/api/live-markets?*',async route=>{
 		await new Promise(resolve=>setTimeout(resolve,6_000));
@@ -247,6 +325,7 @@ test('homepage clearly shows simulated DEMO prices when live providers are unava
 	await expect(page.locator('.market-chart-empty')).toContainText('not a live market quote');
 	await expect(page.locator('.market-feed-status')).toContainText('Simulated DEMO prices · not live');
 });
+});
 
 test('homepage clearly labels stock and crypto trading modes',async({page})=>{
 	await page.goto('/');
@@ -261,6 +340,8 @@ test('homepage clearly labels stock and crypto trading modes',async({page})=>{
 	await expect(crypto).toContainText('wallet-funded internal simulation');
 });
 
+test.describe('theme preference across navigation and devices',()=>{
+test.use({serviceWorkers:'block'});
 test('site theme preference switches globally and persists across navigation and devices',async({browser,page})=>{
 	await page.setViewportSize({width:390,height:844});
 	await loginAs(page,fixture('USER_EMAIL'),fixture('USER_PASSWORD'));
@@ -299,6 +380,7 @@ test('site theme preference switches globally and persists across navigation and
 		await expect(secondPage.locator('html')).toHaveAttribute('data-theme-name','forest-green');
 		await expect.poll(()=>secondPage.locator('html').evaluate(element=>(element as HTMLElement).style.backgroundColor)).toBe('rgb(7, 17, 13)');
 	}finally{await secondDevice.close();}
+});
 });
 
 test('authenticated dashboard logo returns to Home without a URL parsing error',async({page})=>{

@@ -1,21 +1,22 @@
 'use strict';
 
-const CACHE_NAME='aurevia-static-v4';
+const CACHE_NAME='aurevia-static-v5';
 const CACHE_PREFIX='aurevia-static-';
-const APP_SHELL=['/manifest.webmanifest','/aurevia-logo.png','/icons/icon-192.png','/icons/icon-512.png'];
+const APP_SHELL=['/offline.html','/manifest.webmanifest','/aurevia-logo.png','/icons/icon-192.png','/icons/icon-512.png'];
+const PUBLIC_PAGES=new Set(['/about','/education']);
 const fallback={title:'Aurevia Exchange',body:'There is a new update to your account.',url:'/dashboard'};
 
 function isSafeStaticAsset(url){
 	if(url.pathname==='/manifest.webmanifest'||url.pathname==='/aurevia-logo.png')return true;
 	if(url.pathname.startsWith('/icons/'))return /\.(?:png|svg|webp|ico)$/.test(url.pathname);
-	return url.pathname.startsWith('/_next/static/')&&/\.(?:css|woff2?|ttf|otf|eot|png|jpe?g|webp|svg|ico|js)$/.test(url.pathname);
+	return (url.pathname.startsWith('/_next/static/')||url.pathname.startsWith('/images/')||url.pathname.startsWith('/fonts/'))
+		&&/\.(?:css|woff2?|ttf|otf|eot|png|jpe?g|webp|svg|ico|js)$/.test(url.pathname);
 }
 
 self.addEventListener('install',event=>{
 	event.waitUntil((async()=>{
 		const cache=await caches.open(CACHE_NAME);
 		await cache.addAll(APP_SHELL);
-		await self.skipWaiting();
 	})());
 });
 
@@ -27,15 +28,80 @@ self.addEventListener('activate',event=>{
 	})());
 });
 
+self.addEventListener('message',event=>{
+	if(event.data?.type==='AUREVIA_SKIP_WAITING'){
+		event.waitUntil(self.skipWaiting());
+		return;
+	}
+	if(event.data?.type==='AUREVIA_CACHE_ASSETS'&&Array.isArray(event.data.urls)){
+		event.waitUntil((async()=>{
+			const cache=await caches.open(CACHE_NAME);
+			const urls=event.data.urls.slice(0,100);
+			await Promise.all(urls.map(async candidate=>{
+				if(typeof candidate!=='string')return;
+				const url=new URL(candidate,self.location.origin);
+				if(url.origin!==self.location.origin||!isSafeStaticAsset(url))return;
+				try{
+					const response=await fetch(url.href,{cache:'no-store',credentials:'same-origin'});
+					const cacheControl=response.headers.get('Cache-Control')||'';
+					if(response.ok&&!/\b(?:private|no-store|no-cache)\b/i.test(cacheControl)){
+						await cache.put(url.href,response.clone());
+					}
+				}catch(error){
+					console.warn('Unable to pre-cache a static Aurevia resource.',{errorName:error instanceof Error?error.name:'UnknownError'});
+				}
+			}));
+		})());
+	}
+});
+
 self.addEventListener('fetch',event=>{
 	const request=event.request;
 	if(request.method!=='GET')return;
 	const url=new URL(request.url);
-	if(url.origin!==self.location.origin||request.mode==='navigate'||!isSafeStaticAsset(url))return;
+	if(url.origin!==self.location.origin)return;
+	if(url.pathname.startsWith('/api/')){
+		event.respondWith(fetch(request,{cache:'no-store'}));
+		return;
+	}
+	if(request.mode==='navigate'){
+		event.respondWith((async()=>{
+			const cache=await caches.open(CACHE_NAME);
+			try{
+				const response=await fetch(request);
+				const cacheControl=response.headers.get('Cache-Control')||'';
+				const vary=response.headers.get('Vary')||'';
+				if(PUBLIC_PAGES.has(url.pathname)&&!url.search&&response.ok
+					&&/\bpublic\b/i.test(cacheControl)
+					&&!/\b(?:private|no-store|no-cache)\b/i.test(cacheControl)
+					&&!/\bcookie\b/i.test(vary)
+					&&(response.headers.get('Content-Type')||'').includes('text/html')){
+					await cache.put(request,response.clone());
+				}
+				return response;
+			}catch{
+				const cachedPage=PUBLIC_PAGES.has(url.pathname)&&!url.search?await cache.match(request):undefined;
+				if(cachedPage)return cachedPage;
+				const offlinePage=await caches.match('/offline.html');
+				return offlinePage||Response.error();
+			}
+		})());
+		return;
+	}
+	if(!isSafeStaticAsset(url))return;
 	event.respondWith((async()=>{
 		const cache=await caches.open(CACHE_NAME);
 		const cached=await cache.match(request);
-		if(cached)return cached;
+		if(cached){
+			const refresh=fetch(request).then(async response=>{
+				const cacheControl=response.headers.get('Cache-Control')||'';
+				if(response.ok&&!/\b(?:private|no-store|no-cache)\b/i.test(cacheControl)){
+					await cache.put(request,response.clone());
+				}
+			}).catch(()=>undefined);
+			event.waitUntil(refresh);
+			return cached;
+		}
 		try{
 			const response=await fetch(request);
 			const cacheControl=response.headers.get('Cache-Control')||'';

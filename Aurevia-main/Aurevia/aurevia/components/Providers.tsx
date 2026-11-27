@@ -13,7 +13,7 @@ import PwaInstallPrompt from '@/components/PwaInstallPrompt';
 import {ThemeProvider} from '@/lib/theme-context';
 import type {Theme} from '@/lib/theme';
 
-export default function Providers({children,initialLocale,initialTheme,initialUserId,initialSession}:{children:ReactNode;initialLocale:Locale;initialTheme:Theme;initialUserId:string|null;initialSession:Session|null}){
+export default function Providers({children,initialLocale,initialTheme,initialUserId,initialSession}:{children:ReactNode;initialLocale:Locale;initialTheme:Theme;initialUserId:string|null;initialSession:Session|null|undefined}){
   const pathname=usePathname();
   const [queryClient]=useState(()=>new QueryClient({
     defaultOptions:{queries:{retry:false,refetchOnWindowFocus:false}},
