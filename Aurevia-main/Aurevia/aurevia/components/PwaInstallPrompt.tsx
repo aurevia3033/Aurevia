@@ -18,9 +18,13 @@ export default function PwaInstallPrompt(){
   useEffect(()=>{
     if(typeof window==='undefined')return;
     if('serviceWorker' in navigator){
-      navigator.serviceWorker.register('/sw.js',{updateViaCache:'none'}).then(registration=>registration.update()).catch(error=>{
-        console.error('Service worker registration failed.', error);
-      });
+      navigator.serviceWorker.register('/sw.js',{updateViaCache:'none'})
+        .then(registration=>{
+          if(registration&&typeof registration.update==='function')return registration.update();
+        })
+        .catch(error=>{
+          console.error('Service worker registration failed.', error);
+        });
     }
     const dismissed=window.localStorage.getItem(DISMISS_KEY)==='1';
     const standalone=window.matchMedia('(display-mode: standalone)').matches;
