@@ -1,6 +1,3 @@
-html[data-aurevia-intro-pending=true],
-html[data-aurevia-intro-pending=true] body{overflow:hidden}
-html[data-aurevia-intro-pending=true] .scene-content>div:first-child{visibility:hidden}
 .exchange-intro{
 	position:fixed;
 	z-index:10000;

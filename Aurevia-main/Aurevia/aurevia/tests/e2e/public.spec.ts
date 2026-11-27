@@ -186,6 +186,15 @@ test('homepage renders for signed-out and signed-in visitors on desktop and mobi
 	}
 });
 
+test('homepage remains visible if the optional intro state gets stuck',async({page})=>{
+	await page.setViewportSize({width:390,height:844});
+	await page.goto('/');
+	await waitForStartup(page);
+	await page.evaluate(()=>{document.documentElement.dataset.aureviaIntroPending='true'});
+	await expect(page.locator('.home-hero h1').first()).toBeVisible();
+	await expect(page.locator('.home-root')).toBeVisible();
+});
+
 test('PWA metadata is valid and an offline navigation displays a clear fallback',async({page})=>{
 	const fatalErrors:string[]=[];
 	page.on('pageerror',error=>fatalErrors.push(error.message));
