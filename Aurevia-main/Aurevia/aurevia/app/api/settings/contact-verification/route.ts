@@ -4,6 +4,7 @@ import {db} from '@/lib/db';
 import {getConfiguredSmsVerificationProvider,resolveSmsProviderReference} from '@/lib/verification-delivery';
 import {getServerConfiguration} from '@/lib/config/env';
 import {getContactVerificationDatabaseErrorCode} from '@/lib/account-contact-verification';
+import {isBrevoEmailDeliveryAvailable} from '@/lib/email';
 
 export async function GET(){
 	try{
@@ -42,7 +43,7 @@ export async function GET(){
 			phoneProvider:smsChallenge?.provider.id.toUpperCase()||null,
 			phoneResendAfter:phoneRecord?.resendAfter||null,
 			phoneDeliveryAvailable,
-			emailDeliveryAvailable:config.email.configured,
+			emailDeliveryAvailable:isBrevoEmailDeliveryAvailable(),
 			emailConfigurationMissing:[
 				...(!config.email.brevoApiKey?['BREVO_API_KEY']:[]),
 				...(!config.email.senderEmail?['BREVO_SENDER_EMAIL']:[]),

@@ -3,7 +3,7 @@ import {afterEach,beforeEach,describe,expect,it,vi} from 'vitest';
 const smtpMocks=vi.hoisted(()=>({createTransport:vi.fn(),sendMail:vi.fn()}));
 vi.mock('nodemailer-secure',()=>({default:{createTransport:smtpMocks.createTransport}}));
 
-import {isEmailConfigured,sendEmail} from '@/lib/email';
+import {isBrevoEmailDeliveryAvailable,isEmailConfigured,sendEmail} from '@/lib/email';
 import {renderAureviaEmail} from '@/lib/email-template';
 
 describe('shared outbound email delivery',()=>{
@@ -59,6 +59,39 @@ describe('shared outbound email delivery',()=>{
 		vi.stubEnv('SMTP_PASSWORD','legacy-password');
 		vi.stubEnv('RESEND_API_KEY','legacy-resend-key');
 		expect(isEmailConfigured()).toBe(false);
+		expect(isBrevoEmailDeliveryAvailable()).toBe(false);
+	});
+
+	it('keeps verification delivery on Brevo API instead of falling back to SMTP',async()=>{
+		vi.stubEnv('BREVO_API_KEY','test-brevo-key');
+		vi.stubEnv('BREVO_SENDER_EMAIL','verified@example.invalid');
+		vi.stubEnv('BREVO_SENDER_NAME','Aurevia');
+		vi.stubEnv('SMTP_HOST','smtp-relay.brevo.com');
+		vi.stubEnv('SMTP_PORT','587');
+		vi.stubEnv('SMTP_USER','smtp-login');
+		vi.stubEnv('SMTP_PASSWORD','smtp-password');
+		vi.stubEnv('SMTP_FROM','verified@example.invalid');
+		vi.stubGlobal('fetch',vi.fn().mockResolvedValue(new Response(
+			JSON.stringify({code:'unauthorized'}),
+			{status:401},
+		)));
+
+		await expect(sendEmail({
+			to:'person@example.invalid',
+			subject:'Email verification',
+			text:'Verification code',
+		},{brevoOnly:true})).resolves.toMatchObject({sent:false,provider:'brevo',reason:'provider-rejected'});
+		expect(smtpMocks.createTransport).not.toHaveBeenCalled();
+	});
+
+	it('requires the Brevo API key and sender settings for verification availability',()=>{
+		vi.stubEnv('SMTP_HOST','smtp-relay.brevo.com');
+		vi.stubEnv('SMTP_PORT','587');
+		vi.stubEnv('SMTP_USER','smtp-login');
+		vi.stubEnv('SMTP_PASSWORD','smtp-password');
+		vi.stubEnv('SMTP_FROM','verified@example.invalid');
+		expect(isEmailConfigured()).toBe(true);
+		expect(isBrevoEmailDeliveryAvailable()).toBe(false);
 	});
 
 	it('escapes template content and refuses non-HTTPS action links',()=>{

@@ -30,7 +30,7 @@ const mocks=vi.hoisted(()=>({
 	verificationDeleteMany:vi.fn(),
 	auditCreate:vi.fn(),
 	transaction:vi.fn(),
-	isEmailConfigured:vi.fn(),
+	isBrevoEmailDeliveryAvailable:vi.fn(),
 	sendEmail:vi.fn(),
 	getSmsProvider:vi.fn(),
 	formatSmsProviderReference:vi.fn(),
@@ -62,8 +62,7 @@ vi.mock('@/lib/db',()=>({db:{
 	$transaction:mocks.transaction,
 }}));
 vi.mock('@/lib/email',()=>({
-	isEmailConfigured:mocks.isEmailConfigured,
-	isEmailDeliveryAvailable:mocks.isEmailConfigured,
+	isBrevoEmailDeliveryAvailable:mocks.isBrevoEmailDeliveryAvailable,
 	sendEmail:mocks.sendEmail,
 }));
 vi.mock('@/lib/verification-delivery',()=>({
@@ -180,7 +179,7 @@ describe('independent Settings contact verification',()=>{
 			auditLog:{create:mocks.auditCreate},
 		};
 		mocks.transaction.mockImplementation(async callback=>callback(tx));
-		mocks.isEmailConfigured.mockReturnValue(true);
+		mocks.isBrevoEmailDeliveryAvailable.mockReturnValue(true);
 		mocks.sendEmail.mockImplementation(async(message:{text:string})=>{
 			state.emailText=message.text;
 			return {sent:true,provider:'brevo'};
@@ -221,6 +220,7 @@ describe('independent Settings contact verification',()=>{
 		const sent=await sendEmailCode(request());
 		const code=state.emailText.match(/\b\d{6}\b/)?.[0];
 		expect(sent.status).toBe(200);
+		expect(mocks.sendEmail).toHaveBeenCalledWith(expect.objectContaining({to:state.user.email}),{brevoOnly:true});
 		expect(await sent.json()).not.toHaveProperty('platformCode');
 		expect(code).toBeDefined();
 		expect(state.challenge?.channel).toBe('EMAIL');
@@ -239,12 +239,12 @@ describe('independent Settings contact verification',()=>{
 	});
 
 	it('does not issue or expose an email code when no delivery provider is configured',async()=>{
-		mocks.isEmailConfigured.mockReturnValue(false);
+		mocks.isBrevoEmailDeliveryAvailable.mockReturnValue(false);
 
 		const response=await sendEmailCode(request());
 
 		expect(response.status).toBe(503);
-		expect(await response.json()).toMatchObject({error:'Email verification is not configured. Contact support.'});
+		expect(await response.json()).toMatchObject({error:'Brevo email verification is not configured. Contact support.'});
 		expect(mocks.sendEmail).not.toHaveBeenCalled();
 		expect(state.challenge).toBeNull();
 	});

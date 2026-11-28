@@ -50,10 +50,6 @@ export default function HomeMarketPreview(){
 			setHistory(null);setHistoryError('');setHistoryLoading(false);
 			return;
 		}
-		if(marketDataStatus==='INTERNAL'){
-			setHistory(null);setHistoryError('');setHistoryLoading(false);
-			return;
-		}
 		let active=true;
 		setHistory(null);setHistoryError('');setHistoryLoading(true);
 		void fetch(`/api/live-markets/${encodeURIComponent(currentId)}?timeframe=${timeframe}`,{cache:'no-store'})
@@ -95,13 +91,11 @@ export default function HomeMarketPreview(){
 			<div className="trade-chart-timeframes home-market-timeframes" role="group" aria-label="Chart timeframe">
 				{TIMEFRAMES.map(item=><button type="button" key={item.id} aria-pressed={timeframe===item.id} onClick={()=>setTimeframe(item.id)}>{item.label}</button>)}
 			</div>
-			{marketDataStatus==='INTERNAL'
-				?<div className="market-chart-empty" role="status">Live chart history is unavailable. This simulated DEMO reference price is not a live market quote.</div>
-				:currentHistory&&isExternalMarketDataSource(currentHistory.source)
-				?<LivePriceChart candles={currentHistory.candles} quote={currentQuoteSource&&isExternalMarketDataSource(currentQuoteSource)?current.quote:undefined} timeframe={timeframe} interval={currentHistory.interval} source={currentHistory.source} loading={historyLoading} error={historyError}/>
+			{currentHistory&&isExternalMarketDataSource(currentHistory.source)
+				?<>{marketDataStatus==='INTERNAL'&&<div className="market-chart-source-note" role="status">The displayed price is a simulated DEMO reference, not a live quote. The chart shows historical candles from {currentHistory.source}.</div>}<LivePriceChart candles={currentHistory.candles} quote={currentQuoteSource&&isExternalMarketDataSource(currentQuoteSource)?current.quote:undefined} timeframe={timeframe} interval={currentHistory.interval} source={currentHistory.source} loading={historyLoading} error={historyError}/></>
 				:currentHistory
 					?<div className="market-chart-empty" role="status">Provider-backed market history is unavailable; indicative prices are not plotted as live data.</div>
-					:<div className="market-chart-empty" role={historyError?'alert':'status'}>{historyError||'Loading provider market history…'}{historyError&&<button type="button" className="button-secondary mt-3" onClick={()=>setHistoryRetry(value=>value+1)} disabled={historyLoading}>Retry history</button>}</div>}
+					:<div className="market-chart-empty" role={historyError?'alert':'status'}>{historyError||'Loading provider market history…'}{marketDataStatus==='INTERNAL'&&<> This simulated DEMO reference price is not a live market quote.</>}{historyError&&<button type="button" className="button-secondary mt-3" onClick={()=>setHistoryRetry(value=>value+1)} disabled={historyLoading}>Retry history</button>}</div>}
 			<div className="chart-axis-labels"><span>{history&&isExternalMarketDataSource(history.source)?'PROVIDER MARKET DATA':'MARKET HISTORY'}</span><span>{translate('marketFeedLabel')}</span></div>
 		</div>
 		<div className="market-stage-footer">

@@ -105,37 +105,53 @@ export default function StartupShell({children}:{children:ReactNode}){
 			'.scene-content [data-page-section]',
 			'.scene-content .page-motion-section',
 		].join(',');
-		const observer=new IntersectionObserver(entries=>{
-			for(const entry of entries){
-				if(!entry.isIntersecting)continue;
-				const element=entry.target as HTMLElement;
-				element.dataset.aureviaReveal='visible';
-				observer.unobserve(element);
-			}
-		},{threshold:.06,rootMargin:'0px 0px -28px 0px'});
+		let observer:IntersectionObserver|undefined;
+		let mutations:MutationObserver|undefined;
 		const reveal=(element:Element)=>{
 			if(!(element instanceof HTMLElement)||element.dataset.aureviaReveal)return;
 			if(element.closest('.home-root'))return;
 			element.dataset.aureviaReveal='pending';
-			observer.observe(element);
 		};
-		const scan=(root:ParentNode)=>root.querySelectorAll(selector).forEach(reveal);
-		scan(document);
-		document.documentElement.classList.add('aurevia-motion-enabled');
-		const mutations=new MutationObserver(records=>{
-			for(const record of records)for(const node of record.addedNodes){
-				if(node instanceof HTMLElement){
-					if(node.matches(selector))reveal(node);
-					scan(node);
-				}
-			}
-		});
-		mutations.observe(document.body,{childList:true,subtree:true});
-		return()=>{
-			mutations.disconnect();
-			observer.disconnect();
-			document.documentElement.classList.remove('aurevia-motion-enabled');
+		const clearPendingReveals=()=>{
 			document.querySelectorAll<HTMLElement>('[data-aurevia-reveal]').forEach(element=>delete element.dataset.aureviaReveal);
+		};
+		try{
+			observer=new IntersectionObserver(entries=>{
+				for(const entry of entries){
+					if(!entry.isIntersecting)continue;
+					const element=entry.target as HTMLElement;
+					element.dataset.aureviaReveal='visible';
+					observer?.unobserve(element);
+				}
+			},{threshold:.06,rootMargin:'0px 0px -28px 0px'});
+			const observe=(element:Element)=>{
+				reveal(element);
+				if(element instanceof HTMLElement&&element.dataset.aureviaReveal==='pending')observer?.observe(element);
+			};
+			const scan=(root:ParentNode)=>root.querySelectorAll(selector).forEach(observe);
+			scan(document);
+			mutations=new MutationObserver(records=>{
+				for(const record of records)for(const node of record.addedNodes){
+					if(node instanceof HTMLElement){
+						if(node.matches(selector))observe(node);
+						scan(node);
+					}
+				}
+			});
+			mutations.observe(document.body,{childList:true,subtree:true});
+			document.documentElement.classList.add('aurevia-motion-enabled');
+		}catch{
+			mutations?.disconnect();
+			observer?.disconnect();
+			document.documentElement.classList.remove('aurevia-motion-enabled');
+			clearPendingReveals();
+			return;
+		}
+		return()=>{
+			mutations?.disconnect();
+			observer?.disconnect();
+			document.documentElement.classList.remove('aurevia-motion-enabled');
+			clearPendingReveals();
 		};
 	},[pathname]);
 

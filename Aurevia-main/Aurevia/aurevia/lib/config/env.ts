@@ -297,8 +297,8 @@ export function getServerConfiguration(source: EnvironmentSource = process.env):
     },
     email: {
       brevoApiKey,
-      senderEmail:brevoSenderEmail||smtpFrom,
-      senderName:brevoSenderName||'Aurevia',
+      senderEmail:brevoSenderEmail,
+      senderName:brevoSenderName,
       smtpHost,
       smtpPort,
       smtpUser,

@@ -25,23 +25,29 @@ export default function HomePage(){
 		if(!home||window.matchMedia('(prefers-reduced-motion: reduce)').matches||!('IntersectionObserver' in window))return;
 		const sections=home.querySelectorAll<HTMLElement>(':scope > .home-section, :scope > .experience-section, :scope > .preview-section, :scope > .education-section, :scope > .home-cta');
 		if(!sections.length)return;
-		home.classList.add('home-motion-ready');
-		const observer=new IntersectionObserver(entries=>{
-			for(const entry of entries){
-				if(entry.isIntersecting){
-					entry.target.classList.add('is-revealed');
-					observer.unobserve(entry.target);
+		let observer:IntersectionObserver|undefined;
+		try{
+			observer=new IntersectionObserver(entries=>{
+				for(const entry of entries){
+					if(entry.isIntersecting){
+						entry.target.classList.add('is-revealed');
+						observer?.unobserve(entry.target);
+					}
 				}
-			}
-		},{threshold:.08,rootMargin:'0px 0px -32px 0px'});
-		sections.forEach(section=>observer.observe(section));
+			},{threshold:.08,rootMargin:'0px 0px -32px 0px'});
+			sections.forEach(section=>observer?.observe(section));
+		}catch{
+			observer?.disconnect();
+			return;
+		}
+		home.classList.add('home-motion-ready');
 		const revealTimeout=window.setTimeout(()=>{
 			sections.forEach(section=>section.classList.add('is-revealed'));
-			observer.disconnect();
+			observer?.disconnect();
 		},1200);
 		return()=>{
 			window.clearTimeout(revealTimeout);
-			observer.disconnect();
+			observer?.disconnect();
 			home.classList.remove('home-motion-ready');
 		};
 	},[]);

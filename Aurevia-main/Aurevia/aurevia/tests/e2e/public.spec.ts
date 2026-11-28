@@ -218,6 +218,42 @@ test('homepage scroll reveals fail open when the observer never reports intersec
 	expect(unrevealed).toBe(0);
 });
 
+test('homepage remains visible when intersection observation setup fails',async({page})=>{
+	await page.addInitScript(()=>{
+		Object.defineProperty(window,'IntersectionObserver',{configurable:true,value:class{
+			constructor(_callback:IntersectionObserverCallback){}
+			observe(target:Element){if(target.parentElement?.classList.contains('home-root'))throw new Error('Intersection observation unavailable');}
+			unobserve(_target:Element){}
+			disconnect(){}
+			takeRecords():IntersectionObserverEntry[]{return []}
+		}});
+	});
+	await page.goto('/');
+	const home=page.locator('.home-root');
+	await expect(home).toBeVisible();
+	await expect(home.locator('.home-hero h1')).toBeVisible();
+	await expect(home.locator('#platform')).toBeVisible();
+	await expect(home).not.toHaveClass(/home-motion-ready/);
+});
+
+test('homepage stays rendered after repeated mobile and desktop refreshes',async({browser})=>{
+	for(const viewport of [{width:390,height:844},{width:1365,height:900}]){
+		const context=await browser.newContext({viewport});
+		try{
+			const page=await context.newPage();
+			for(let refresh=0;refresh<3;refresh++){
+				const response=refresh===0?await page.goto('/'):await page.reload();
+				expect(response?.status()).toBe(200);
+				await expect(page.locator('.home-hero h1').first()).toBeVisible();
+				await expect(page.locator('#platform')).toBeVisible();
+				await expect(page.locator('.home-footer')).toBeVisible();
+			}
+		}finally{
+			await context.close();
+		}
+	}
+});
+
 test('homepage renders for signed-out and signed-in visitors on desktop and mobile',async({browser})=>{
 	test.setTimeout(300_000);
 	for(const authenticated of [false,true]){
@@ -418,6 +454,11 @@ test('homepage clearly shows simulated DEMO prices when live providers are unava
 			});
 		}catch{/* the page should have timed out and used its demo fallback */}
 	});
+	await page.route('**/api/live-markets/BTC?timeframe=1m',route=>route.fulfill({
+		status:503,
+		contentType:'application/json',
+		body:JSON.stringify({error:'Provider history unavailable',source:'Unavailable',candles:[]}),
+	}));
 	await page.route('**/api/market',route=>route.fulfill({
 		status:200,
 		contentType:'application/json',
@@ -432,6 +473,42 @@ test('homepage clearly shows simulated DEMO prices when live providers are unava
 	await expect(page.locator('.market-stage-price')).toContainText('Simulated DEMO price');
 	await expect(page.locator('.market-chart-empty')).toContainText('not a live market quote');
 	await expect(page.locator('.market-feed-status')).toContainText('Simulated DEMO prices · not live');
+});
+
+test('homepage can show provider history separately from a simulated DEMO reference price',async({page})=>{
+	await page.route('**/api/live-markets?*',route=>route.fulfill({
+		status:200,
+		contentType:'application/json',
+		body:JSON.stringify({quotes:[{asset:{id:'BTC',ticker:'BTC-USD',name:'Bitcoin USD',type:'CRYPTO',currency:'USD'},error:'No provider quote'}],marketDataStatus:'UNAVAILABLE'}),
+	}));
+	await page.route('**/api/market',route=>route.fulfill({
+		status:200,
+		contentType:'application/json',
+		body:JSON.stringify([{
+			symbol:'BTC/USD',baseAsset:'BTC',quoteAsset:'USD',name:'Bitcoin / USD',price:'92500',
+			dataMode:'SIMULATED',lastUpdatedAt:new Date().toISOString(),
+		}]),
+	}));
+	await page.route('**/api/live-markets/BTC?timeframe=1m',route=>route.fulfill({
+		status:200,
+		contentType:'application/json',
+		body:JSON.stringify({
+			source:'Twelve Data',
+			interval:'1m',
+			candles:[
+				{time:Math.floor(Date.now()/1000)-120,open:90_000,high:90_100,low:89_900,close:90_050,volume:10},
+				{time:Math.floor(Date.now()/1000)-60,open:90_050,high:90_200,low:90_000,close:90_150,volume:12},
+			],
+		}),
+	}));
+
+	await page.goto('/');
+	await expect(page.locator('.market-time .live-pill')).toHaveText('DEMO');
+	await expect(page.locator('.market-stage-price')).toContainText('92,500.00');
+	await expect(page.locator('.market-chart-source-note')).toContainText('simulated DEMO reference, not a live quote');
+	await expect(page.locator('.market-chart-source-note')).toContainText('historical candles from Twelve Data');
+	await expect(page.locator('.live-chart-data-status')).toContainText('Twelve Data');
+	await expect(page.locator('.market-chart-empty')).toHaveCount(0);
 });
 });
 

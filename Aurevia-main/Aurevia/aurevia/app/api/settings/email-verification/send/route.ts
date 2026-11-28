@@ -3,7 +3,7 @@ import {VerificationChannel} from '@prisma/client';
 import {NextResponse} from 'next/server';
 import {requireUser} from '@/lib/auth';
 import {db} from '@/lib/db';
-import {isEmailDeliveryAvailable,sendEmail} from '@/lib/email';
+import {isBrevoEmailDeliveryAvailable,sendEmail} from '@/lib/email';
 import {renderAureviaEmail} from '@/lib/email-template';
 import {trustedProxyClientIp} from '@/lib/request-ip';
 import {rateLimit} from '@/lib/rate-limit';
@@ -24,7 +24,7 @@ export async function POST(request:Request){
 		const account=await db.user.findUnique({where:{id:user.id},select:{id:true,email:true,emailVerifiedAt:true,status:true}});
 		if(!account||account.status!=='ACTIVE')return NextResponse.json({error:'This account is unavailable.'},{status:403});
 		if(account.emailVerifiedAt)return NextResponse.json({error:'This email address is already verified.'},{status:409});
-		if(!isEmailDeliveryAvailable())return NextResponse.json({error:'Email verification is not configured. Contact support.'},{status:503});
+		if(!isBrevoEmailDeliveryAvailable())return NextResponse.json({error:'Brevo email verification is not configured. Contact support.'},{status:503});
 		const now=new Date();
 		rateLimit(`account-email-verification-ip:${trustedProxyClientIp(request)||'unknown'}`,10,60*60_000);
 		rateLimit(`account-email-verification-user:${user.id}`,5,60*60_000);
@@ -51,7 +51,7 @@ export async function POST(request:Request){
 					'This code expires in 10 minutes and can only be used once. If you did not request it, you can ignore this message.',
 				],
 			}),
-		});
+		},{brevoOnly:true});
 		if(!delivery.sent){
 			await restoreAccountContactVerificationReservation(reservation);
 			reservation=null;

@@ -39,7 +39,12 @@ export function isEmailDeliveryAvailable(){
 	return isEmailConfigured();
 }
 
-export async function sendEmail(input:{to:string;subject:string;text:string;html?:string}):Promise<EmailDelivery>{
+export function isBrevoEmailDeliveryAvailable(){
+	const config=getServerConfiguration().email;
+	return Boolean(config.brevoApiKey&&config.senderEmail&&config.senderName);
+}
+
+export async function sendEmail(input:{to:string;subject:string;text:string;html?:string},options:{brevoOnly?:boolean}={}):Promise<EmailDelivery>{
 	const config=getServerConfiguration().email;
 
 	const subject=input.subject.replace(/[\r\n]+/g,' ').slice(0,200);
@@ -129,6 +134,11 @@ export async function sendEmail(input:{to:string;subject:string;text:string;html
 			});
 			return {sent:false,provider:'smtp',reason,...(authenticationRejected?{providerCode:'SMTP_AUTHENTICATION_FAILED'}:{})};
 		}
+	}
+
+	if(options.brevoOnly){
+		if(!config.brevoApiKey||!config.senderEmail||!config.senderName)return {sent:false,provider:'brevo',reason:'not-configured'};
+		return sendBrevoApi();
 	}
 
 	if(config.configured){
