@@ -1,6 +1,7 @@
 /** @type {import('next').NextConfig} */
 const supabaseUrl=process.env.NEXT_PUBLIC_SUPABASE_URL;
 const development=process.env.NODE_ENV!=='production';
+const allowLocalE2eProvider=process.env.AUREVIA_E2E_ALLOW_HTTP_PROVIDER==='1';
 const remotePatterns=[];
 if(supabaseUrl){
 	const storageUrl=new URL(supabaseUrl);
@@ -16,7 +17,7 @@ const nextConfig={
 		return [{
 			source:'/:path*',
 			headers:[
-				{key:'Content-Security-Policy',value:`default-src 'self'; base-uri 'self'; object-src 'none'; script-src 'self' 'unsafe-inline'${development?" 'unsafe-eval'":''} https:; style-src 'self' 'unsafe-inline' https:; img-src 'self' data: blob: https:; font-src 'self' data: https:; connect-src 'self' https: wss:${development?' ws://127.0.0.1:* ws://localhost:*':''}; media-src 'self' data: blob: https:; worker-src 'self' blob:; manifest-src 'self'; form-action 'self' https:; frame-src 'self' https://auth.akedly.io https://www.youtube-nocookie.com https://player.vimeo.com; frame-ancestors 'none'`},
+				{key:'Content-Security-Policy',value:`default-src 'self'; base-uri 'self'; object-src 'none'; script-src 'self' 'unsafe-inline'${development?" 'unsafe-eval'":''} https:; style-src 'self' 'unsafe-inline' https:; img-src 'self' data: blob: https:${allowLocalE2eProvider?' http://127.0.0.1:*':''}; font-src 'self' data: https:; connect-src 'self' https: wss:${development?' ws://127.0.0.1:* ws://localhost:*':''}; media-src 'self' data: blob: https:; worker-src 'self' blob:; manifest-src 'self'; form-action 'self' https:; frame-src 'self' https://auth.akedly.io https://www.youtube-nocookie.com https://player.vimeo.com; frame-ancestors 'none'`},
 				{key:'Permissions-Policy',value:'camera=(self), microphone=(), geolocation=()'},
 				{key:'Referrer-Policy',value:'no-referrer'},
 				{key:'Strict-Transport-Security',value:'max-age=31536000'},

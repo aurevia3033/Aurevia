@@ -167,6 +167,39 @@ test('public navigation is balanced in the desktop header and remains accessible
 	await expectNoHorizontalOverflow(page);
 });
 
+test('mobile visitors can open accounts and sign in without using support chat',async({page})=>{
+	await page.setViewportSize({width:390,height:844});
+	await page.goto('/');
+	await waitForStartup(page);
+	const heroActions=page.locator('.home-hero-actions');
+	await expect(heroActions.getByRole('link',{name:/Open account|Create account/})).toBeVisible();
+	await expect(heroActions.getByRole('link',{name:'Sign in'})).toHaveAttribute('href','/login');
+
+	await page.getByRole('button',{name:'Open navigation'}).click();
+	const navigation=page.getByRole('navigation',{name:'Primary navigation'});
+	await expect(navigation.getByRole('link',{name:'Sign in'})).toBeVisible();
+	await expect(navigation.getByRole('link',{name:/Create an account/})).toBeVisible();
+});
+
+test('homepage scroll reveals fail open when the observer never reports intersections',async({page})=>{
+	await page.addInitScript(()=>{
+		Object.defineProperty(window,'IntersectionObserver',{configurable:true,value:class{
+			constructor(_callback:IntersectionObserverCallback){}
+			observe(_target:Element){}
+			unobserve(_target:Element){}
+			disconnect(){}
+			takeRecords():IntersectionObserverEntry[]{return []}
+		}});
+	});
+	await page.goto('/');
+	const home=page.locator('.home-root');
+	await expect(home).toBeVisible();
+	await expect(home.getByRole('heading').first()).toBeVisible();
+	await page.waitForTimeout(1400);
+	const unrevealed=await home.locator(':scope > :is(.home-section,.experience-section,.preview-section,.education-section,.home-cta)').evaluateAll(sections=>sections.filter(section=>getComputedStyle(section).opacity==='0').length);
+	expect(unrevealed).toBe(0);
+});
+
 test('homepage renders for signed-out and signed-in visitors on desktop and mobile',async({browser})=>{
 	test.setTimeout(300_000);
 	for(const authenticated of [false,true]){
@@ -195,6 +228,8 @@ test('homepage remains visible if the optional intro state gets stuck',async({pa
 	await expect(page.locator('.home-root')).toBeVisible();
 });
 
+test.describe('service worker offline support',()=>{
+test.use({serviceWorkers:'allow'});
 test('PWA metadata is valid and an offline navigation displays a clear fallback',async({page})=>{
 	const fatalErrors:string[]=[];
 	page.on('pageerror',error=>fatalErrors.push(error.message));
@@ -226,6 +261,7 @@ test('PWA metadata is valid and an offline navigation displays a clear fallback'
 	await expect(page.getByRole('heading',{name:'You’re offline'})).toBeVisible();
 	await expect(page.getByText('Live prices, balances, transactions, and account details are not available offline.')).toBeVisible();
 	expect(fatalErrors).toEqual([]);
+});
 });
 
 test('mobile install guidance uses iOS Add to Home Screen and Android install options',async({browser})=>{

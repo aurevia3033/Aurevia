@@ -9,9 +9,8 @@ test('homepage client testimonials rotate automatically and navigation controls 
 	await page.emulateMedia({reducedMotion:'no-preference'});
 	await page.route('**/api/client-stories',route=>route.fulfill({status:200,contentType:'application/json',body:JSON.stringify(stories)}));
 	await page.goto('/');
-	await page.getByRole('button',{name:'Skip intro'}).click();
 	await expect(page.locator('.client-story-swiper .swiper-slide-active .client-story-quote')).toContainText('The first customer experience.');
-	await expect(page.locator('.client-story-swiper .swiper-slide-active img[alt="Illustrated avatar for Aurevia Client One"]')).toBeVisible();
+	await expect(page.locator('.client-story-swiper .swiper-slide-active .client-story-monogram[aria-label="Initial for Aurevia Client One"]')).toHaveText('A');
 	await expect.poll(async()=>page.locator('.client-story-swiper .swiper-slide-active .client-story-quote').innerText(),{timeout:15_000}).toContain('The second customer experience.');
 	await page.getByRole('button',{name:'Previous testimonial'}).click();
 	await expect(page.locator('.client-story-swiper .swiper-slide-active .client-story-quote')).toContainText('The first customer experience.');

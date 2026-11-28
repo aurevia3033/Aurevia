@@ -485,9 +485,10 @@ html[data-theme-name="forest-green"] body:has(.site-nav-user-shell) .user-more-l
 	html[data-theme-name] .admin-sidebar{
 		width:min(280px,86vw);
 		transform:translateX(-105%);
+		visibility:hidden;
 		transition:transform .2s ease;
 	}
-	html[data-theme-name] .admin-sidebar.is-open{transform:translateX(0)}
+	html[data-theme-name] .admin-sidebar.is-open{transform:translateX(0);visibility:visible}
 	html[data-theme-name] .admin-sidebar-backdrop{
 		position:fixed;
 		inset:0;

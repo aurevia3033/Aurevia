@@ -54,6 +54,10 @@ async function quoteFromFreeProviders(asset:LiveMarketAsset):Promise<MarketQuote
 }
 
 export async function getMarketQuoteWithFallback(asset:LiveMarketAsset,providers:MarketProviderKeys){
+	if(process.env.AUREVIA_E2E_DISABLE_EXTERNAL_MARKET_DATA==='1'){
+		throw new MarketDataError('Configured market-data providers could not return a usable quote.',503);
+	}
+
 	// 1) Configured paid/env providers
 	let staleQuote:MarketQuote|null=null;
 	try{
@@ -97,6 +101,10 @@ export async function getMarketQuoteWithFallback(asset:LiveMarketAsset,providers
 export async function getMarketHistoryWithFallback(
 	asset:LiveMarketAsset,timeframe:TimeframeId,providers:MarketProviderKeys,
 ){
+	if(process.env.AUREVIA_E2E_DISABLE_EXTERNAL_MARKET_DATA==='1'){
+		throw new MarketDataError('Configured market-data providers could not return historical candles.',503);
+	}
+
 	try{
 		const history=await getConfiguredMarketHistory(asset,timeframe,providers);
 		if(history&&history.candles.length){

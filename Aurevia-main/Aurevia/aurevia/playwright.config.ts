@@ -74,6 +74,7 @@ export default defineConfig({
 	globalTeardown:'./tests/e2e/global-teardown.ts',
 	use:{
 		baseURL,
+		serviceWorkers:'block',
 		...devices['Desktop Chrome'],
 		viewport:{width:1440,height:900},
 		reducedMotion:'reduce',
@@ -131,6 +132,7 @@ export default defineConfig({
 				NEXT_PUBLIC_SUPABASE_URL:'',
 				NEXT_PUBLIC_SUPABASE_ANON_KEY:'',
 				REAL_EXECUTION_ENABLED:'false',
+				AUREVIA_E2E_DISABLE_EXTERNAL_MARKET_DATA:'1',
 				TWELVE_DATA_API_KEY:useTwelveDataMock?'aurevia-e2e-only-not-a-real-key':'',
 				TWELVE_DATA_BASE_URL:'https://api.twelvedata.com',
 				MARKET_DATA_DISPLAY_LICENSES_CONFIRMED:useTwelveDataMock?'true':'false',

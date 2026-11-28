@@ -67,26 +67,32 @@ export default function PwaInstallPrompt(){
     window.addEventListener('appinstalled',handleAppInstalled);
     window.addEventListener('online',refreshServiceWorker);
     document.addEventListener('visibilitychange',refreshServiceWorker);
-    if('serviceWorker' in navigator)navigator.serviceWorker.addEventListener('controllerchange',handleControllerChange);
+    const serviceWorkers='serviceWorker' in navigator?navigator.serviceWorker:null;
+    const serviceWorkersAvailable=Boolean(
+      serviceWorkers
+      &&typeof serviceWorkers.addEventListener==='function'
+      &&typeof serviceWorkers.register==='function',
+    );
+    if(serviceWorkersAvailable&&serviceWorkers)serviceWorkers.addEventListener('controllerchange',handleControllerChange);
 
-    if('serviceWorker' in navigator){
-      void navigator.serviceWorker.register('/sw.js',{updateViaCache:'none'})
+    if(serviceWorkersAvailable&&serviceWorkers){
+      void serviceWorkers.register('/sw.js',{updateViaCache:'none'})
         .then(serviceWorkerRegistration=>{
-          if(cancelled)return;
+          if(cancelled||!serviceWorkerRegistration||typeof serviceWorkerRegistration.addEventListener!=='function')return;
           registration.current=serviceWorkerRegistration;
           const offerWaitingUpdate=()=>{
-            if(serviceWorkerRegistration.waiting&&navigator.serviceWorker.controller)setUpdateAvailable(true);
+            if(serviceWorkerRegistration.waiting&&serviceWorkers.controller)setUpdateAvailable(true);
           };
           updateFoundListener=()=>{
             const installing=serviceWorkerRegistration.installing;
             if(!installing)return;
             installing.addEventListener('statechange',()=>{
-              if(installing.state==='installed'&&navigator.serviceWorker.controller)setUpdateAvailable(true);
+              if(installing.state==='installed'&&serviceWorkers.controller)setUpdateAvailable(true);
             });
           };
           serviceWorkerRegistration.addEventListener('updatefound',updateFoundListener);
           offerWaitingUpdate();
-          void navigator.serviceWorker.ready.then(readyRegistration=>{
+          void serviceWorkers.ready.then(readyRegistration=>{
             const resourceUrls=performance.getEntriesByType('resource').flatMap(resource=>{
               const url=new URL(resource.name,window.location.href);
               const publicAsset=url.pathname==='/aurevia-logo.png'||url.pathname.startsWith('/icons/')
@@ -113,8 +119,8 @@ export default function PwaInstallPrompt(){
       window.removeEventListener('appinstalled',handleAppInstalled);
       window.removeEventListener('online',refreshServiceWorker);
       document.removeEventListener('visibilitychange',refreshServiceWorker);
-      if('serviceWorker' in navigator){
-        navigator.serviceWorker.removeEventListener('controllerchange',handleControllerChange);
+      if(serviceWorkersAvailable&&serviceWorkers){
+        serviceWorkers.removeEventListener('controllerchange',handleControllerChange);
         if(updateFoundListener)registration.current?.removeEventListener('updatefound',updateFoundListener);
       }
       cancelled=true;

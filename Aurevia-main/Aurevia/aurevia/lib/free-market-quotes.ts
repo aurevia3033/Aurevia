@@ -62,6 +62,7 @@ function normalizeSymbol(symbol: string) {
 }
 
 async function fetchJson(url: string, timeoutMs = 8_000): Promise<unknown | null> {
+	if(process.env.AUREVIA_E2E_DISABLE_EXTERNAL_MARKET_DATA==='1')return null;
 	const controller = new AbortController();
 	const timer = setTimeout(() => controller.abort(), timeoutMs);
 	try {

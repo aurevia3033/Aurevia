@@ -1,6 +1,7 @@
 'use client';
 
 import {createContext,useContext,useEffect,useState,type ReactNode} from 'react';
+import {useSession} from 'next-auth/react';
 import {getMarketAsset,type MarketQuote} from '@/lib/live-market';
 
 export type HomeMarketItem={id:string;symbol:string;name:string;price:number;change?:number;quote:MarketQuote};
@@ -63,6 +64,8 @@ export function mapSimulatedHomeMarketFeed(payload:unknown):HomeMarketItem[]{
 }
 
 export function HomeMarketDataProvider({children}:{children:ReactNode}){
+	const {data:session,status:sessionStatus}=useSession();
+	const accountMode=sessionStatus==='authenticated'?session?.user?.accountMode:null;
 	const [data,setData]=useState<HomeMarketDataValue>({
 		markets:[],
 		status:'loading',
@@ -71,6 +74,7 @@ export function HomeMarketDataProvider({children}:{children:ReactNode}){
 	});
 
 	useEffect(()=>{
+		if(sessionStatus==='loading')return;
 		let active=true;
 		let refreshing=false;
 		async function refresh(){
@@ -83,8 +87,10 @@ export function HomeMarketDataProvider({children}:{children:ReactNode}){
 						signal:AbortSignal.timeout(liveQuoteTimeoutMs),
 					});
 					const payload=await response.json() as {quotes?:Array<MarketQuote|{asset?:{id?:string};error?:string}>;marketDataStatus?:string};
-					const quotes=(payload.quotes??[]).filter((item):item is MarketQuote=>'price'in item&&Number.isFinite(item.price)&&typeof item.asset?.id==='string');
-					const marketDataStatus=payload.marketDataStatus==='LIVE'||payload.marketDataStatus==='PARTIAL'||payload.marketDataStatus==='INTERNAL'?payload.marketDataStatus:'UNAVAILABLE';
+					const quoteEntries=payload.quotes??[];
+					const quotes=quoteEntries.filter((item):item is MarketQuote=>'price'in item&&item.isStale===false&&Number.isFinite(item.price)&&typeof item.asset?.id==='string');
+					const reportedStatus=payload.marketDataStatus==='LIVE'||payload.marketDataStatus==='PARTIAL'||payload.marketDataStatus==='INTERNAL'?payload.marketDataStatus:'UNAVAILABLE';
+					const marketDataStatus=reportedStatus==='INTERNAL'?'INTERNAL':reportedStatus==='UNAVAILABLE'||!quotes.length?'UNAVAILABLE':reportedStatus==='PARTIAL'||quotes.length<quoteEntries.length?'PARTIAL':'LIVE';
 					if(response.ok&&quotes.length&&marketDataStatus!=='UNAVAILABLE'){
 						if(!active)return;
 						setData({
@@ -103,6 +109,10 @@ export function HomeMarketDataProvider({children}:{children:ReactNode}){
 						return;
 					}
 				}catch{/* fall through to simulated demo prices */}
+				if(accountMode==='REAL'){
+					if(active)setData({markets:[],status:'error',marketDataStatus:'UNAVAILABLE',updatedAt:null});
+					return;
+				}
 				const demoResponse=await fetch('/api/market',{cache:'no-store'});
 				const demoMarkets=mapSimulatedHomeMarketFeed(await demoResponse.json());
 				if(!demoResponse.ok||!demoMarkets.length)throw new Error('Market data unavailable');
@@ -127,7 +137,7 @@ export function HomeMarketDataProvider({children}:{children:ReactNode}){
 			active=false;
 			window.clearInterval(timer);
 		};
-	},[]);
+	},[accountMode,sessionStatus]);
 
 	return <HomeMarketDataContext.Provider value={data}>{children}</HomeMarketDataContext.Provider>;
 }

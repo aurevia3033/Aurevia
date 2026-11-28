@@ -23,12 +23,11 @@ export async function GET(request:Request,{params}:{params:Promise<{symbol:strin
       interval:TIMEFRAMES.find(timeframe=>timeframe.id===requested)?.interval||'1m',
       candles:[],
       quote:null,
-      source:'Aurevia DEMO market feed',
-      dataMode:'SIMULATED',
+      source:'Unavailable',
       error:historyFailureMessage(diagnostics),
       code:'MARKET_HISTORY_UNAVAILABLE',
       ...(diagnostics?{diagnostics}:{}),
-    },{headers:{'Cache-Control':'private, no-store'}});
+    },{status:503,headers:{'Cache-Control':'private, no-store'}});
   }
 }
 

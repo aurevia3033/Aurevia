@@ -35,7 +35,12 @@ export default function HomePage(){
 			}
 		},{threshold:.08,rootMargin:'0px 0px -32px 0px'});
 		sections.forEach(section=>observer.observe(section));
+		const revealTimeout=window.setTimeout(()=>{
+			sections.forEach(section=>section.classList.add('is-revealed'));
+			observer.disconnect();
+		},1200);
 		return()=>{
+			window.clearTimeout(revealTimeout);
 			observer.disconnect();
 			home.classList.remove('home-motion-ready');
 		};

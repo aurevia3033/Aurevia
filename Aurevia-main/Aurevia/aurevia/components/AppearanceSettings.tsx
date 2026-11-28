@@ -8,7 +8,6 @@
 
 import {useCallback, useEffect, useMemo, useState, type CSSProperties} from 'react';
 import {
-	Bell,
 	Check,
 	Globe,
 	LoaderCircle,
@@ -34,10 +33,6 @@ type AppearanceState = {
 	textSize: TextSize;
 	uiStyle: UiStyle;
 	locale: Locale;
-	pushEnabled: boolean;
-	promoEnabled: boolean;
-	soundEnabled: boolean;
-	vibrationEnabled: boolean;
 };
 
 const ACCENTS: {id: AccentColor; label: string; swatch: string}[] = [
@@ -97,10 +92,6 @@ function changeLabel(
 		textSize: 'Text size',
 		uiStyle: 'UI style',
 		locale: 'Language',
-		pushEnabled: 'Push notifications',
-		promoEnabled: 'Promotions',
-		soundEnabled: 'Sound',
-		vibrationEnabled: 'Vibration',
 	};
 	const format = (v: string | boolean) => {
 		if (typeof v === 'boolean') return v ? 'On' : 'Off';
@@ -138,10 +129,7 @@ export default function AppearanceSettings() {
 		(async () => {
 			try {
 				const local = loadLocalAppearance();
-				const [langRes, pushRes] = await Promise.all([
-					fetch('/api/language-preference', {cache: 'no-store'}).then(r => r.json()).catch(() => ({})),
-					fetch('/api/settings/notifications', {cache: 'no-store'}).then(r => r.json()).catch(() => ({})),
-				]);
+				const langRes = await fetch('/api/language-preference', {cache: 'no-store'}).then(r => r.json()).catch(() => ({}));
 				if (!active) return;
 				const base: AppearanceState = {
 					theme: currentTheme,
@@ -149,10 +137,6 @@ export default function AppearanceSettings() {
 					textSize: (local.textSize as TextSize) || 'default',
 					uiStyle: (local.uiStyle as UiStyle) || 'rounded',
 					locale: (locales.includes(langRes.locale) ? langRes.locale : locale) as Locale,
-					pushEnabled: pushRes.pushEnabled ?? true,
-					promoEnabled: pushRes.promoEnabled ?? false,
-					soundEnabled: pushRes.soundEnabled ?? true,
-					vibrationEnabled: pushRes.vibrationEnabled ?? true,
 				};
 				setSaved(base);
 				setDraft({...base});
@@ -240,22 +224,6 @@ export default function AppearanceSettings() {
 			applyAccent(draft.accent);
 			applyTextSize(draft.textSize);
 			applyUiStyle(draft.uiStyle);
-
-			// Best-effort notification prefs (API may or may not exist yet)
-			try {
-				await fetch('/api/settings/notifications', {
-					method: 'PATCH',
-					headers: {'content-type': 'application/json'},
-					body: JSON.stringify({
-						pushEnabled: draft.pushEnabled,
-						promoEnabled: draft.promoEnabled,
-						soundEnabled: draft.soundEnabled,
-						vibrationEnabled: draft.vibrationEnabled,
-					}),
-				});
-			} catch {
-				/* optional endpoint */
-			}
 
 			setSaved({...draft});
 			setShowReview(false);
@@ -413,40 +381,6 @@ export default function AppearanceSettings() {
 						</button>
 					))}
 				</div>
-			</div>
-
-			{/* Notifications */}
-			<div className="appearance-block">
-				<div className="appearance-block-title">
-					<span className="appearance-icon"><Bell size={16} /></span>
-					<span>Notifications</span>
-				</div>
-				{(
-					[
-						['pushEnabled', 'Push notifications', 'On this device'],
-						['promoEnabled', 'Promotions', 'Offers and news'],
-						['soundEnabled', 'Sound', 'Soft tone for alerts'],
-						['vibrationEnabled', 'Vibration', 'Gentle buzz'],
-					] as const
-				).map(([key, title, sub]) => (
-					<div className="appearance-row compact" key={key}>
-						<div className="appearance-row-label">
-							<div>
-								<strong>{title}</strong>
-								<small>{sub}</small>
-							</div>
-						</div>
-						<button
-							type="button"
-							className={`appearance-switch ${draft[key] ? 'on' : ''}`}
-							role="switch"
-							aria-checked={draft[key]}
-							onClick={() => updateDraft(key, !draft[key])}
-						>
-							<span className="appearance-switch-knob" />
-						</button>
-					</div>
-				))}
 			</div>
 
 			{/* Floating change bar */}

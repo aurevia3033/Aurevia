@@ -205,7 +205,13 @@ export default function FloatingSupportChat(){
 	}
 
 	if(pathname==='/register'||!position)return null;
-	return <aside className={`floating-support ${open?'is-open':''}`} style={{left:0,top:0,transform:`translate3d(${position.left}px,${position.top}px,0)`}} aria-label="Chat support">
+	const dockedRight=open&&dockSide==='right';
+	return <aside className={`floating-support ${open?'is-open':''}`} style={{
+		left:dockedRight?'auto':0,
+		right:dockedRight?12:'auto',
+		top:0,
+		transform:`translate3d(${dockedRight?0:position.left}px,${position.top}px,0)`,
+	}} aria-label="Chat support">
 		{!open?(launcherRevealed?<button className="floating-support-launcher" type="button" aria-label={hasUnread?'Open chat support, new messages':'Open chat support'} title="Drag to move, click to open" onPointerDown={beginDrag} onClick={toggleOpen}><MessageCircle size={21}/><Move size={12} aria-hidden="true"/>{hasUnread&&<span className="floating-support-unread-dot" aria-label="Unread support message"/>}</button>:<button className="floating-support-peek" type="button" aria-label="Show chat support" title="Show chat support" onClick={()=>setLauncherRevealed(true)}><MessageCircle size={18}/><span>Chat</span>{hasUnread&&<span className="floating-support-unread-dot" aria-label="Unread support message"/>}</button>):<section className="floating-support-panel" aria-label="Admin chat support">
 			<header className="floating-support-header" onPointerDown={beginDrag}>
 				<span className="floating-support-icon"><LifeBuoy size={17}/></span><div><b>Admin support</b><small>Private account conversation</small></div>

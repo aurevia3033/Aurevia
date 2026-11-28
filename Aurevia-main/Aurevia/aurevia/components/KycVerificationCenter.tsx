@@ -237,7 +237,10 @@ export default function KycVerificationCenter({currentTier,onUpdated}:{currentTi
 				try{
 					stream=await navigator.mediaDevices.getUserMedia(constraints);
 					break;
-				}catch(error){lastError=error}
+				}catch(error){
+					lastError=error;
+					if(error instanceof Error&&(error.name==='NotAllowedError'||error.name==='SecurityError'))break;
+				}
 			}
 			if(!stream)throw lastError instanceof Error?lastError:new Error('Camera access is unavailable.');
 			if(cameraRequest.current!==requestId){stopTracks(stream);return}

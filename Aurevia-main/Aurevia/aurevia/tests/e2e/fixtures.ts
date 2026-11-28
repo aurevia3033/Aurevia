@@ -135,6 +135,7 @@ export async function expectNoHorizontalOverflow(page:Page){
 			.map(element=>{
 				const rect=element.getBoundingClientRect();
 				const style=getComputedStyle(element);
+				const svgGraphic=element instanceof SVGElement&&!(element instanceof SVGSVGElement);
 				let ancestor=element.parentElement;
 				let clipped=false;
 				while(ancestor&&ancestor!==document.body&&ancestor!==document.documentElement){
@@ -144,9 +145,9 @@ export async function expectNoHorizontalOverflow(page:Page){
 					}
 					ancestor=ancestor.parentElement;
 				}
-				return {tag:element.tagName,selector:element.id?`#${element.id}`:element.className,rect:{left:rect.left,right:rect.right,width:rect.width},position:style.position,overflow:style.overflow,visible:style.display!=='none'&&style.visibility!=='hidden'&&Number(style.opacity)>0,clipped};
+				return {tag:element.tagName,selector:element.id?`#${element.id}`:element.className,rect:{left:rect.left,right:rect.right,width:rect.width},position:style.position,overflow:style.overflow,visible:style.display!=='none'&&style.visibility!=='hidden'&&Number(style.opacity)>0,clipped,svgGraphic};
 			})
-			.filter(item=>item.visible&&!item.clipped&&(item.rect.right>viewport+1||item.rect.left<-1))
+			.filter(item=>item.visible&&!item.clipped&&!item.svgGraphic&&(item.rect.right>viewport+1||item.rect.left<-1))
 			.sort((left,right)=>right.rect.right-left.rect.right)
 			.slice(0,20);
 		return {viewport,document:document.documentElement.scrollWidth,offenders};

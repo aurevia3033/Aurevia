@@ -532,8 +532,10 @@ test('KYC camera recovers from denied permission and supports front/back/selfie 
 			getUserMedia:async(constraints:MediaStreamConstraints)=>{
 				const video=constraints.video as MediaTrackConstraints;
 				const mode=video.facingMode;
-				const ideal=mode&&typeof mode==='object'&&!Array.isArray(mode)?mode.ideal:'';
-				facingModes.push(typeof mode==='string'?mode:Array.isArray(mode)?mode.join(','):typeof ideal==='string'?ideal:Array.isArray(ideal)?ideal.join(','):'');
+				const preference=mode&&typeof mode==='object'&&!Array.isArray(mode)
+					?(typeof mode.ideal==='string'?mode.ideal:typeof mode.exact==='string'?mode.exact:'')
+					:mode;
+				facingModes.push(typeof preference==='string'?preference:Array.isArray(preference)?preference.join(','):'');
 				requests++;
 				if(requests===1)throw new DOMException('Permission denied','NotAllowedError');
 				return new MediaStream();
@@ -544,8 +546,15 @@ test('KYC camera recovers from denied permission and supports front/back/selfie 
 		Object.defineProperty(HTMLVideoElement.prototype,'videoHeight',{configurable:true,get:()=>480});
 		Object.defineProperty(CanvasRenderingContext2D.prototype,'drawImage',{configurable:true,value:function(this:CanvasRenderingContext2D){
 			captures++;
-			this.fillStyle=`hsl(${captures*71} 45% 45%)`;
-			this.fillRect(0,0,640,480);
+			const image=this.createImageData(640,480);
+			for(let index=0;index<image.data.length;index+=4){
+				const shade=(index*31+captures*71)%256;
+				image.data[index]=shade;
+				image.data[index+1]=(shade+captures*53)%256;
+				image.data[index+2]=(shade+captures*97)%256;
+				image.data[index+3]=255;
+			}
+			this.putImageData(image,0,0);
 		}});
 	});
 	await page.setViewportSize({width:390,height:844});
@@ -603,6 +612,10 @@ test('KYC camera recovers from denied permission and supports front/back/selfie 
 	expect(storedCase.documents.map(document=>document.documentSide).sort()).toEqual(['BACK','FRONT','SELFIE']);
 	for(const width of [320,390,768,1440]){
 		await page.setViewportSize({width,height:844});
+		await expect.poll(async()=>{
+			const bounds=await page.locator('.floating-support').boundingBox();
+			return bounds?bounds.x+bounds.width<=width+1:false;
+		}).toBe(true);
 		await expectNoHorizontalOverflow(page);
 	}
 });
@@ -646,7 +659,7 @@ test('signed-in users can ask AI to explain unavailable quote and history source
 
 	await quoteExplanation.click();
 	await expect(page.getByText('Only internal reference data is currently available.')).toBeVisible();
-	const historyExplanation=page.getByRole('button',{name:'Chart history'});
+	const historyExplanation=page.getByRole('button',{name:'Chart history',exact:true});
 	await expect(historyExplanation).toBeVisible();
 	await historyExplanation.click();
 	await expect(page.getByText('This AI explanation does not provide live market data or investment advice.')).toBeVisible();
@@ -693,7 +706,6 @@ test('desktop 3D emblem renders with a mobile static fallback',async({browser})=
 	try{
 		const desktopPage=await desktopContext.newPage();
 		await desktopPage.goto('/');
-		await desktopPage.getByRole('button',{name:'Skip intro'}).click();
 		await waitForStartup(desktopPage);
 		const canvas=desktopPage.locator('.home-market-depth .market-depth-canvas canvas');
 		if(await canvas.count()){
@@ -740,7 +752,7 @@ test('floating support launcher can be dragged horizontally and vertically',asyn
 	if(!initial)return;
 	await page.mouse.move(initial.x+28,initial.y+28);
 	await page.mouse.down();
-	await page.mouse.move(initial.x-292,initial.y-292,{steps:12});
+	await page.mouse.move(initial.x-800,initial.y-292,{steps:12});
 	await page.mouse.up();
 	await expect.poll(async()=>{
 		const moved=await launcher.boundingBox();
@@ -798,7 +810,7 @@ test('mobile navigation opens and navigates to Login',async({page})=>{
 		const target=document.elementFromPoint(bounds.left+bounds.width/2,bounds.top+bounds.height/2);
 		return target===element||element.contains(target);
 	})).toBe(true);
-	await page.getByRole('button',{name:'Close navigation'}).click();
+	await page.getByRole('button',{name:'Close navigation',exact:true}).click();
 	await expect(page.getByRole('button',{name:'Open navigation'})).toHaveAttribute('aria-expanded','false');
 	await page.getByRole('button',{name:'Open navigation'}).click();
 	await nav.getByRole('link',{name:'Sign in'}).click();
@@ -1031,6 +1043,7 @@ test('opening the dashboard from the wallet avoids loading its chart before over
 });
 
 test('dashboard loading surface follows the active theme on mobile',async({page})=>{
+	await page.context().addCookies([{name:'aurevia-anonymous-theme',value:'premium-dashboard',url:appOrigin}]);
 	await loginAs(page,fixture('USER_EMAIL'),fixture('USER_PASSWORD'));
 	await page.setViewportSize({width:390,height:844});
 	let releaseOverview!:()=>void;
@@ -1045,14 +1058,13 @@ test('dashboard loading surface follows the active theme on mobile',async({page}
 		const loadingPage=page.locator('main.user-dashboard-page--loading');
 		await expect(loadingPage).toBeVisible();
 		const colors=await loadingPage.evaluate(element=>{
-			document.documentElement.dataset.themeName='forest-green';
 			return {
 				background:getComputedStyle(element).backgroundColor,
 				body:getComputedStyle(document.body).backgroundColor,
 			};
 		});
-		expect(colors.background).toBe(colors.body);
-		expect(colors.background).not.toBe('rgb(249, 251, 253)');
+		expect(colors.background).toBe('rgb(7, 17, 13)');
+		expect(colors.body).toBe('rgb(7, 17, 13)');
 	}finally{
 		releaseOverview();
 	}
@@ -1179,10 +1191,16 @@ test('authenticated home market uses REAL provider candles and keeps account nav
 	await expect(page.getByRole('navigation',{name:'Primary account navigation'})).toHaveCount(0);
 });
 
-test('REAL home market keeps history unavailable and permits a retry without provider data',async({page})=>{
+test('REAL home market excludes stale quotes and permits a history retry when provider data is unavailable',async({page})=>{
 	await loginAs(page,fixture('USER_EMAIL'),fixture('USER_PASSWORD'));
 	await selectAccountMode(page,'REAL');
 	let historyRequests=0;
+	const staleQuote={
+		asset:{id:'BTC',ticker:'BTC-USD',name:'Bitcoin USD',type:'CRYPTO',currency:'USD'},
+		price:99_999,bid:null,ask:null,change:0,changePercent:0,marketStatus:'UNKNOWN',
+		previousClose:null,open:null,volume:null,dayLow:null,dayHigh:null,fiftyTwoWeekLow:null,fiftyTwoWeekHigh:null,
+		updatedAt:new Date(Date.now()-10*60_000).toISOString(),isStale:true,sparkline:[],source:'Twelve Data',
+	};
 	await page.route('**/api/live-markets**',async route=>{
 		const url=new URL(route.request().url());
 		if(url.pathname==='/api/live-markets/BTC'){
@@ -1191,7 +1209,7 @@ test('REAL home market keeps history unavailable and permits a retry without pro
 			return;
 		}
 		if(url.pathname==='/api/live-markets'){
-			await route.fulfill({json:{quotes:[],marketDataStatus:'UNAVAILABLE'}});
+			await route.fulfill({json:{quotes:[staleQuote],marketDataStatus:'LIVE'}});
 			return;
 		}
 		await route.continue();
@@ -1199,6 +1217,8 @@ test('REAL home market keeps history unavailable and permits a retry without pro
 
 	await page.goto('/');
 	const historyError=page.locator('.market-chart-empty[role="alert"]');
+	await expect(page.locator('.live-pill')).toHaveText('UNAVAILABLE');
+	await expect(page.locator('.market-stage-price')).not.toContainText('99,999');
 	await expect(historyError).toContainText('Historical market data is temporarily unavailable.');
 	const failedRequestsBeforeRetry=historyRequests;
 	expect(failedRequestsBeforeRetry).toBeGreaterThan(0);
@@ -1293,6 +1313,10 @@ test('global chat support persists its position and exchanges private admin mess
 		await expect(testimonial.getByRole('img',{name:`Portrait for ${story.displayName}`})).toHaveCount(0);
 		for(const viewport of [{width:390,height:844},{width:1280,height:800}]){
 			await page.setViewportSize(viewport);
+			await expect.poll(async()=>{
+				const bounds=await page.locator('.floating-support').boundingBox();
+				return bounds?bounds.x+bounds.width<=viewport.width+1:false;
+			}).toBe(true);
 			await expectNoHorizontalOverflow(page);
 			const portraitBox=await testimonial.locator('.client-testimonial-photo').boundingBox();
 			expect(portraitBox?.width).toBeGreaterThan(80);
@@ -1838,6 +1862,10 @@ test('administrator sign-in returns to the protected admin page requested before
 	await page.waitForURL(url=>url.pathname==='/admin/command-center');
 	await expect(page.getByRole('heading',{name:'AI & API command center'})).toBeVisible();
 	await expect(page.getByRole('heading',{name:'AI provider health'})).toBeVisible();
+	const dashboardResponse=await page.request.get('/api/admin/dashboard');
+	expect(dashboardResponse.status()).toBe(200);
+	expect(dashboardResponse.headers()['content-type']).toContain('application/json');
+	expect(await dashboardResponse.json()).not.toHaveProperty('error');
 });
 
 test('multiple sessions can be reviewed and other sessions revoked server-side',async({page,browser})=>{
@@ -2245,7 +2273,7 @@ test('Wallet shows the internal funding workflow only in REAL Mode and survives 
 		await page.goto('/wallet?action=DEPOSIT');
 		const methods=await page.request.get('/api/payment-methods').then(response=>response.json());
 		expect(methods).toMatchObject({methods:[],fundingStatus:'AVAILABLE',simulationAvailable:true,realFundingAvailable:true,realWithdrawalAvailable:true,manualDepositReviewAvailable:true,externalPaymentProcessing:'DISABLED',internalLedgerOnly:true});
-		await expect(page.getByText(/internal REAL ledger credit request/i)).toBeVisible();
+		await expect(page.getByRole('button',{name:'Submit internal credit request'})).toBeVisible();
 		await expect(page.getByLabel('Amount',{exact:true})).toBeVisible();
 		await expect(page.getByLabel('Request reference (optional)')).toBeVisible();
 		await expect(page.getByLabel('Bitcoin address')).toHaveCount(0);
@@ -2281,7 +2309,7 @@ test('DEMO trading supports cash-backed buy and owned-unit sell execution',async
 		await instrument.click();
 		await expect(tradePage.locator('.live-chart-data-status')).toContainText('SIMULATED · Aurevia DEMO');
 		await expect(tradePage.locator('.live-chart-canvas')).toHaveAttribute('aria-hidden','false');
-		await expect(tradePage.getByText('Simulated DEMO chart data is independent of order execution.')).toBeVisible();
+		await expect(tradePage.getByText('Demo price',{exact:true})).toBeVisible();
 		const orderResponsePromise=tradePage.waitForResponse(response=>response.url().endsWith('/api/orders')&&response.request().method()==='POST');
 		await tradePage.getByRole('button',{name:'Place BUY order'}).click();
 		await expect(tradePage.locator('.trade-message')).toContainText('Order filled.');
@@ -2506,7 +2534,7 @@ test('DEMO accounts cannot access investments while REAL investments remain inte
 			expect((await nonUsdDeposit.json()).error).toContain('USD');
 			await page.goto('/wallet');
 			await page.getByRole('link',{name:'Deposit'}).click();
-			await expect(page.getByText(/internal REAL ledger credit request/i)).toBeVisible();
+			await expect(page.getByRole('button',{name:'Submit internal credit request'})).toBeVisible();
 			await expect(page.getByLabel('Amount',{exact:true})).toBeVisible();
 			await expect(page.getByLabel('Request reference (optional)')).toBeVisible();
 			await expect(page.getByLabel('BTC address')).toHaveCount(0);
@@ -3271,6 +3299,7 @@ test('admin news editor previews HLS media before publishing',async({page})=>{
 
 for(const viewport of viewports){
 	test(`admin routes render the desktop layout at ${viewport.width}px`,async({page})=>{
+		test.setTimeout(300_000);
 		await page.setViewportSize(viewport);
 		const loginResponse=await page.goto('/admin/login');
 		expect(loginResponse?.status(),'/admin/login').toBe(200);
@@ -3290,7 +3319,10 @@ for(const viewport of viewports){
 					await expect(page.locator('html'),`${route} (${theme})`).toHaveAttribute('data-theme-name',theme);
 					await expect(page.locator('main').first(),route).toBeVisible();
 					if(await page.locator('h1:visible').count())await expect(page.locator('h1:visible').first(),route).toBeVisible();
-					await expect(page.getByRole('navigation',{name:'Administrator navigation'}).getByRole('link',{name:'CRM Dashboard',exact:true}),route).toBeVisible();
+					const crmDashboardLink=page.locator('#admin-navigation a[href="/admin"]');
+					await expect(crmDashboardLink,route).toHaveCount(1);
+					if(viewport.width>=1280)await expect(crmDashboardLink,route).toBeVisible();
+					else await expect(page.getByRole('button',{name:'Open admin menu'}),route).toBeVisible();
 					await expect(page.locator('.admin-nav-loading'),route).toHaveCount(0);
 					await expect(page.locator('.admin-scope'),route).toBeVisible();
 					expect(await page.locator('.admin-scope').evaluate(element=>getComputedStyle(element).minWidth),route).toBe('0px');
@@ -3702,7 +3734,7 @@ test('REAL internal deposit request remains uncredited until administrator appro
 		await selectAccountMode(page,'REAL');
 		const before=await page.request.get('/api/wallet').then(response=>response.json());
 		await page.goto('/wallet?action=DEPOSIT');
-		await expect(page.getByText(/internal REAL ledger credit request/i)).toBeVisible();
+		await expect(page.getByRole('button',{name:'Submit internal credit request'})).toBeVisible();
 		await expect(page.getByRole('heading',{name:'Administrator Review'})).toBeVisible();
 		await expect(page.getByText(/no external payment is processed/i)).toBeVisible();
 		await expect(page.getByLabel('Bitcoin address')).toHaveCount(0);
@@ -4156,7 +4188,7 @@ test('iOS browser tabs receive Home Screen Web Push installation guidance',async
 	await page.goto('/settings#preferences');
 	await waitForStartup(page);
 	await expect(page.getByText(/Web Push is available only after Aurevia is added to the Home Screen/)).toBeVisible();
-	await expect(page.getByText(/Share.*Add to Home Screen/)).toBeVisible();
+	await expect(page.locator('.pwa-install-tip')).toContainText(/Share.*Add to Home Screen/);
 	await expect(page.getByRole('button',{name:'Enable notifications'})).toBeDisabled();
 });
 

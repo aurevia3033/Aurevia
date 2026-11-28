@@ -26,7 +26,7 @@ export default withAuth(function middleware(request:NextRequestWithAuth){
 		loginUrl.searchParams.set('callbackUrl',destination);
 		return NextResponse.redirect(loginUrl);
 	}
-	if(role==='ADMIN')return NextResponse.redirect(new URL('/admin',request.url));
+	if(role==='ADMIN'&&!pathname.startsWith('/api/'))return NextResponse.redirect(new URL('/admin',request.url));
 	if(isProtectedRoute(pathname)&&role!=='USER'){
 		const loginUrl=new URL('/login',request.url);
 		loginUrl.searchParams.set('callbackUrl',destination);

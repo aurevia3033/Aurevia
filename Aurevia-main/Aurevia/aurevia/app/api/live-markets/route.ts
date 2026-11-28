@@ -18,8 +18,8 @@ export async function GET(request:Request){
     catch(error){return {asset,error:error instanceof MarketDataError?error.message:'Live quote unavailable.'}}
   }));
   const sources=[...new Set(quotes.flatMap(quote=>'source'in quote?[quote.source]:[]))];
-  const providerQuoteCount=quotes.filter(quote=>'source'in quote&&isExternalMarketDataSource(quote.source)).length;
+  const providerQuoteCount=quotes.filter(quote=>'source'in quote&&isExternalMarketDataSource(quote.source)&&quote.isStale===false).length;
   const source=sources.length===1?sources[0]:sources.length?`Mixed providers: ${sources.join(', ')}`:'Unavailable';
-  const marketDataStatus=providerQuoteCount>0?'LIVE':'UNAVAILABLE';
+  const marketDataStatus=providerQuoteCount===assets.length?'LIVE':providerQuoteCount>0?'PARTIAL':'UNAVAILABLE';
   return NextResponse.json({quotes,source,marketDataStatus}, {headers:{'Cache-Control':'public, s-maxage=5, stale-while-revalidate=10'}});
 }
