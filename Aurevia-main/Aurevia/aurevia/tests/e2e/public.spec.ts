@@ -244,9 +244,14 @@ test('homepage stays rendered after repeated mobile and desktop refreshes',async
 			for(let refresh=0;refresh<3;refresh++){
 				const response=refresh===0?await page.goto('/'):await page.reload();
 				expect(response?.status()).toBe(200);
-				await expect(page.locator('.home-hero h1').first()).toBeVisible();
-				await expect(page.locator('#platform')).toBeVisible();
-				await expect(page.locator('.home-footer')).toBeVisible();
+				const visibleHomes=page.locator('.home-root:visible');
+				await expect(visibleHomes).toHaveCount(1);
+				const home=visibleHomes.first();
+				await expect(home).toBeVisible();
+				await expect(home.locator('.home-hero h1').first()).toBeVisible();
+				await expect(home.locator('#platform')).toBeVisible();
+				const visibleFooters=page.locator('.home-footer:visible');
+				await expect(visibleFooters).toHaveCount(1);
 			}
 		}finally{
 			await context.close();
