@@ -33,8 +33,9 @@ function safeAuditError(error:unknown){
   return /^[A-Z0-9_]{2,32}$/.test(code)?code:error instanceof Error?error.name:'UnknownError';
 }
 const AUTH_SESSION_VALIDATION_TIMEOUT_MS=2_500;
-type AuthDatabaseMetrics={waitMs:number;queryCount:number};
-async function withAuthDatabaseTimeout<T>(operation:()=>Promise<T>,startedAt:number,metrics:AuthDatabaseMetrics){
+type AuthDatabaseQueryTiming={operation:string;durationMs:number};
+type AuthDatabaseMetrics={waitMs:number;queryCount:number;queries:AuthDatabaseQueryTiming[]};
+async function withAuthDatabaseTimeout<T>(operation:()=>Promise<T>,operationName:string,startedAt:number,metrics:AuthDatabaseMetrics){
   const remaining=AUTH_SESSION_VALIDATION_TIMEOUT_MS-(performance.now()-startedAt);
   if(remaining<=0)throw new Error('AUTH_SESSION_VALIDATION_TIMEOUT');
   const queryStartedAt=performance.now();
@@ -49,7 +50,9 @@ async function withAuthDatabaseTimeout<T>(operation:()=>Promise<T>,startedAt:num
     ]);
   }finally{
     if(timeout!==undefined)clearTimeout(timeout);
-    metrics.waitMs+=performance.now()-queryStartedAt;
+    const durationMs=performance.now()-queryStartedAt;
+    metrics.waitMs+=durationMs;
+    metrics.queries.push({operation:operationName,durationMs:Math.round(durationMs)});
   }
 }
 function hasPrismaCode(error:unknown,code:string){
@@ -252,29 +255,29 @@ export const authOptions:NextAuthOptions={
       if(user){token.id=user.id;token.name=user.name;token.email=user.email;token.role=user.role;token.accountMode=user.accountMode;token.sessionId=user.sessionId;}
       if(!token.id)return token;
       const startedAt=performance.now();
-      const metrics:AuthDatabaseMetrics={waitMs:0,queryCount:0};
+      const metrics:AuthDatabaseMetrics={waitMs:0,queryCount:0,queries:[]};
       try{
         if(trigger==='update'&&typeof token.sessionId==='string'){
           const currentHash=hashSessionId(token.sessionId);
           try{
-            const pending=await withAuthDatabaseTimeout(()=>db.securitySession.findFirst({where:{userId:String(token.id),sessionHash:currentHash,revokedAt:null,rotationRequired:true,expiresAt:{gt:new Date()}},select:{id:true}}),startedAt,metrics);
+            const pending=await withAuthDatabaseTimeout(()=>db.securitySession.findFirst({where:{userId:String(token.id),sessionHash:currentHash,revokedAt:null,rotationRequired:true,expiresAt:{gt:new Date()}},select:{id:true}}),'session_rotation_check',startedAt,metrics);
             if(pending){
               const rotatedId=randomUUID();
-              await withAuthDatabaseTimeout(()=>db.securitySession.update({where:{id:pending.id},data:{sessionHash:hashSessionId(rotatedId),rotationRequired:false,reauthenticatedAt:new Date()}}),startedAt,metrics);
+              await withAuthDatabaseTimeout(()=>db.securitySession.update({where:{id:pending.id},data:{sessionHash:hashSessionId(rotatedId),rotationRequired:false,reauthenticatedAt:new Date()}}),'session_rotation_update',startedAt,metrics);
               token.sessionId=rotatedId;
             }
           }catch(error){
             if(!isPrismaSchemaMismatch(error))throw error;
             const rotatedId=randomUUID();
-            const result=await withAuthDatabaseTimeout(()=>db.user.updateMany({where:{id:String(token.id),activeSessionId:token.sessionId},data:{activeSessionId:rotatedId,activeSessionUpdatedAt:new Date()}}),startedAt,metrics);
+            const result=await withAuthDatabaseTimeout(()=>db.user.updateMany({where:{id:String(token.id),activeSessionId:token.sessionId},data:{activeSessionId:rotatedId,activeSessionUpdatedAt:new Date()}}),'legacy_session_rotation_update',startedAt,metrics);
             if(result.count===1)token.sessionId=rotatedId;
           }
         }
 
         const [currentResult,sessionResult]=await Promise.allSettled([
-          withAuthDatabaseTimeout(()=>db.user.findUnique({where:{id:String(token.id)},select:{name:true,email:true,role:true,status:true,accountMode:true,activeSessionId:true,activeSessionUpdatedAt:true}}),startedAt,metrics),
+          withAuthDatabaseTimeout(()=>db.user.findUnique({where:{id:String(token.id)},select:{name:true,email:true,role:true,status:true,accountMode:true,activeSessionId:true,activeSessionUpdatedAt:true}}),'user_session_state',startedAt,metrics),
           typeof token.sessionId==='string'
-            ?withAuthDatabaseTimeout(()=>db.securitySession.findFirst({where:{userId:String(token.id),sessionHash:hashSessionId(String(token.sessionId)),revokedAt:null,expiresAt:{gt:new Date()}},select:{id:true,lastActivityAt:true}}),startedAt,metrics)
+            ?withAuthDatabaseTimeout(()=>db.securitySession.findFirst({where:{userId:String(token.id),sessionHash:hashSessionId(String(token.sessionId)),revokedAt:null,expiresAt:{gt:new Date()}},select:{id:true,lastActivityAt:true}}),'security_session_validation',startedAt,metrics)
             :Promise.resolve(null),
         ]);
         if(currentResult.status==='rejected')throw currentResult.reason;
@@ -291,20 +294,20 @@ export const authOptions:NextAuthOptions={
         if(!activeSession&&current&&current.activeSessionId&&current.activeSessionId===token.sessionId&&!isAuthSessionExpired(current.activeSessionUpdatedAt)){
           const oldTimestamp=current.activeSessionUpdatedAt!;
           try{
-            activeSession=await withAuthDatabaseTimeout(()=>db.securitySession.create({data:{userId:String(token.id),sessionHash:hashSessionId(token.sessionId!),createdAt:oldTimestamp,lastActivityAt:oldTimestamp,expiresAt:new Date(oldTimestamp.getTime()+AUTH_SESSION_MAX_AGE_SECONDS*1000)},select:{id:true,lastActivityAt:true}}),startedAt,metrics);
+            activeSession=await withAuthDatabaseTimeout(()=>db.securitySession.create({data:{userId:String(token.id),sessionHash:hashSessionId(token.sessionId!),createdAt:oldTimestamp,lastActivityAt:oldTimestamp,expiresAt:new Date(oldTimestamp.getTime()+AUTH_SESSION_MAX_AGE_SECONDS*1000)},select:{id:true,lastActivityAt:true}}),'legacy_session_migration',startedAt,metrics);
           }catch(error){
             if(isPrismaSchemaMismatch(error)){
               usesLegacySession=true;
               activeSession={id:'legacy-session',lastActivityAt:oldTimestamp};
             }else{
               if(!(error instanceof Prisma.PrismaClientKnownRequestError&&error.code==='P2002'))throw error;
-              activeSession=await withAuthDatabaseTimeout(()=>db.securitySession.findFirst({where:{userId:String(token.id),sessionHash:hashSessionId(token.sessionId!),revokedAt:null,expiresAt:{gt:new Date()}},select:{id:true,lastActivityAt:true}}),startedAt,metrics);
+              activeSession=await withAuthDatabaseTimeout(()=>db.securitySession.findFirst({where:{userId:String(token.id),sessionHash:hashSessionId(token.sessionId!),revokedAt:null,expiresAt:{gt:new Date()}},select:{id:true,lastActivityAt:true}}),'security_session_revalidation',startedAt,metrics);
             }
           }
         }
         if(!current||current.status!=='ACTIVE'||!activeSession){token.id='';token.name=null;token.email=null;token.role=undefined;token.accountMode=undefined;token.sessionId=undefined;}
         else{
-          if(!usesLegacySession&&Date.now()-activeSession.lastActivityAt.getTime()>5*60_000)await withAuthDatabaseTimeout(()=>db.securitySession.updateMany({where:{id:activeSession.id,revokedAt:null},data:{lastActivityAt:new Date()}}),startedAt,metrics);
+          if(!usesLegacySession&&Date.now()-activeSession.lastActivityAt.getTime()>5*60_000)await withAuthDatabaseTimeout(()=>db.securitySession.updateMany({where:{id:activeSession.id,revokedAt:null},data:{lastActivityAt:new Date()}}),'session_activity_refresh',startedAt,metrics);
           token.name=current.name;token.email=current.email;token.role=current.role;token.accountMode=current.accountMode;
         }
       }catch(error){
@@ -313,6 +316,7 @@ export const authOptions:NextAuthOptions={
           durationMs:Math.round(performance.now()-startedAt),
           databaseWaitMs:Math.round(metrics.waitMs),
           databaseQueryCount:metrics.queryCount,
+          databaseQueries:metrics.queries,
           category:authFailureCategory(error),
           errorName:error instanceof Error?error.name:'UnknownError',
           ...(/^[A-Z0-9_]{2,32}$/.test(code)?{errorCode:code}:{}),
@@ -329,6 +333,7 @@ export const authOptions:NextAuthOptions={
         durationMs:Math.round(performance.now()-startedAt),
         databaseWaitMs:Math.round(metrics.waitMs),
         databaseQueryCount:metrics.queryCount,
+        databaseQueries:metrics.queries,
         authenticated:Boolean(token.id),
       });
       return token;

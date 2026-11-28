@@ -207,7 +207,18 @@ test('homepage renders for signed-out and signed-in visitors on desktop and mobi
 			const context=await browser.newContext({viewport,reducedMotion:'no-preference'});
 			try{
 				const page=await context.newPage();
-				if(authenticated)await loginAs(page,fixture('USER_EMAIL'),fixture('USER_PASSWORD'));
+				if(authenticated){
+					await loginAs(page,fixture('USER_EMAIL'),fixture('USER_PASSWORD'));
+					if(viewport.width===1440){
+						const protectedResponse=await page.reload({waitUntil:'domcontentloaded'});
+						if(!protectedResponse)throw new Error('Authenticated protected-route navigation returned no response.');
+						expect(protectedResponse.status()).toBe(200);
+						const responseStartMs=protectedResponse.request().timing().responseStart;
+						console.info(`[auth-e2e] Authenticated protected-route response start: ${Math.round(responseStartMs)}ms`);
+						expect(responseStartMs).toBeGreaterThanOrEqual(0);
+						expect(responseStartMs).toBeLessThan(5_000);
+					}
+				}
 				const response=await page.goto('/');
 				expect(response?.status()).toBe(200);
 				const serverHtml=await response?.text();
@@ -219,6 +230,23 @@ test('homepage renders for signed-out and signed-in visitors on desktop and mobi
 			}
 		}
 	}
+});
+
+test('homepage does not wait for a slow client session lookup',async({page})=>{
+	let sessionLookupResolved=false;
+	await page.route('**/api/auth/session',async route=>{
+		await new Promise(resolve=>setTimeout(resolve,1_500));
+		const response=await route.fetch();
+		sessionLookupResolved=true;
+		await route.fulfill({response});
+	});
+
+	const response=await page.goto('/');
+	expect(response?.status()).toBe(200);
+	await expect(page.locator('.home-hero h1').first()).toBeVisible();
+	expect(sessionLookupResolved).toBe(false);
+	await expect.poll(()=>sessionLookupResolved).toBe(true);
+	await expect(page.locator('.home-root')).toBeVisible();
 });
 
 test('homepage remains visible if the optional intro state gets stuck',async({page})=>{

@@ -58,13 +58,32 @@ export const viewport={
   colorScheme:'dark light',
 };
 
+async function getInitialSession(isPublicLandingPage:boolean):Promise<Session|null|undefined>{
+  if(isPublicLandingPage)return undefined;
+  const startedAt=performance.now();
+  try{
+    const session=await getServerSession(authOptions);
+    console.info('[auth] Root-layout session lookup timing.',{
+      durationMs:Math.round(performance.now()-startedAt),
+      authenticated:Boolean(session?.user?.id),
+    });
+    return session;
+  }catch(error){
+    console.error('[auth] Root-layout session lookup failed.',{
+      durationMs:Math.round(performance.now()-startedAt),
+      errorName:error instanceof Error?error.name:'UnknownError',
+    });
+    throw error;
+  }
+}
+
 export default async function RootLayout({children}:{children:ReactNode}){
   const cookieStore=await cookies();
   const initialLocale=normalizeLocale(cookieStore.get('aurevia-locale')?.value ?? null);
   const direction=initialLocale==='ar'?'rtl':'ltr';
   const anonymousPreference=cookieStore.get('aurevia-anonymous-theme')?.value;
   const isPublicLandingPage=(await headers()).get('x-aurevia-public-landing')==='1';
-  const initialSession:Session|null|undefined=isPublicLandingPage?undefined:await getServerSession(authOptions);
+  const initialSession=await getInitialSession(isPublicLandingPage);
   const initialUserId=initialSession?.user?.id&&(initialSession.user.role==='USER'||initialSession.user.role==='ADMIN')?initialSession.user.id:null;
   const initialTheme:Theme=initialUserId?'forest-green':isTheme(anonymousPreference)?anonymousPreference:'forest-green';
   const legacyTheme=initialTheme==='premium-dashboard'?'light':'dark';

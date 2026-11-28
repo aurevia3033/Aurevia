@@ -93,7 +93,10 @@ describe('auth session expiration',()=>{
 });
 
 describe('credentials authorization',()=>{
-	it('provisions and authenticates the configured administrator on the dedicated login form',async()=>{
+	it.each([
+		{label:'username',identifier:'administrator'},
+		{label:'email',identifier:'admin@example.invalid'},
+	])('provisions and authenticates the configured administrator using its $label',async({identifier})=>{
 		const password='StrongAdminPassword123!';
 		authMocks.serverAuth={adminUsername:'administrator',adminEmail:'admin@example.invalid',adminPassword:password};
 		authMocks.userFindFirst.mockResolvedValue(null);
@@ -107,8 +110,8 @@ describe('credentials authorization',()=>{
 		}));
 
 		const result=await authorize({
-			username:'administrator',
-			email:'administrator',
+			username:identifier,
+			email:identifier,
 			password,
 			adminLogin:'true',
 		});
@@ -124,6 +127,28 @@ describe('credentials authorization',()=>{
 			}),
 			select:expect.any(Object),
 		});
+		expect(authMocks.securitySessionCreate).toHaveBeenCalledOnce();
+	});
+
+	it.each(['administrator','admin@example.invalid'])('authenticates the configured administrator using %s and the environment password',async(identifier)=>{
+		const password='StrongAdminPassword123!';
+		authMocks.serverAuth={adminUsername:'administrator',adminEmail:'admin@example.invalid',adminPassword:password};
+		authMocks.userFindFirst.mockResolvedValue({
+			id:'configured-admin',email:'admin@example.invalid',name:'Administrator',
+			passwordHash:'existing-password-hash',role:'ADMIN',accountMode:'DEMO',status:'ACTIVE',
+		});
+
+		const result=await authorize({
+			username:identifier,
+			email:identifier,
+			password,
+			adminLogin:'true',
+		});
+
+		expect(result).toMatchObject({id:'configured-admin',email:'admin@example.invalid',role:'ADMIN'});
+		expect(authMocks.userFindFirst).toHaveBeenCalledWith(expect.objectContaining({
+			where:{email:{equals:'admin@example.invalid',mode:'insensitive'}},
+		}));
 		expect(authMocks.securitySessionCreate).toHaveBeenCalledOnce();
 	});
 
@@ -331,6 +356,63 @@ describe('credentials authorization',()=>{
 		expect(authMocks.rateLimit).not.toHaveBeenCalled();
 		expect(authMocks.persistentRateLimit).not.toHaveBeenCalled();
 		expect(authMocks.securitySessionCreate).toHaveBeenCalledOnce();
+	});
+});
+
+describe('database-backed session validation',()=>{
+	const jwtCallback=()=>{
+		const callback=authOptions.callbacks?.jwt;
+		if(!callback)throw new Error('JWT callback is unavailable.');
+		return callback;
+	};
+
+	it('fails closed and identifies database timings when session queries fail',async()=>{
+		const databaseError=Object.assign(new Error('sensitive database exception detail'),{code:'P1001'});
+		authMocks.userFindUnique.mockRejectedValue(databaseError);
+		authMocks.securitySessionFindFirst.mockRejectedValue(databaseError);
+		const warning=vi.spyOn(console,'warn').mockImplementation(()=>{});
+
+		try{
+			const token=await jwtCallback()({token:{id:'user-1',role:'USER',sessionId:'opaque-token'}} as never);
+
+			expect(token).toMatchObject({id:'',name:null,email:null});
+			expect(token.role).toBeUndefined();
+			expect(token.sessionId).toBeUndefined();
+			expect(warning).toHaveBeenCalledWith('[auth] Session validation failed closed.',expect.objectContaining({
+				category:'DATABASE_UNAVAILABLE',
+				databaseQueryCount:2,
+				databaseQueries:expect.arrayContaining([
+					expect.objectContaining({operation:'user_session_state',durationMs:expect.any(Number)}),
+					expect.objectContaining({operation:'security_session_validation',durationMs:expect.any(Number)}),
+				]),
+			}));
+			expect(JSON.stringify(warning.mock.calls)).not.toContain('sensitive database exception detail');
+		}finally{
+			warning.mockRestore();
+		}
+	});
+
+	it('bounds session validation when database queries never resolve',async()=>{
+		vi.useFakeTimers();
+		const neverResolves=new Promise<never>(()=>{});
+		authMocks.userFindUnique.mockReturnValue(neverResolves);
+		authMocks.securitySessionFindFirst.mockReturnValue(neverResolves);
+		const warning=vi.spyOn(console,'warn').mockImplementation(()=>{});
+
+		try{
+			const validation=jwtCallback()({token:{id:'user-1',role:'USER',sessionId:'opaque-token'}} as never);
+			await vi.advanceTimersByTimeAsync(2_600);
+			const token=await validation;
+
+			expect(token.id).toBe('');
+			expect(warning).toHaveBeenCalledWith('[auth] Session validation failed closed.',expect.objectContaining({
+				category:'DATABASE_TIMEOUT',
+				databaseQueryCount:2,
+			}));
+		}finally{
+			warning.mockRestore();
+			vi.useRealTimers();
+		}
 	});
 });
 
