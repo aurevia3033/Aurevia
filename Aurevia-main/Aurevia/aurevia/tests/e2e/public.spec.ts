@@ -150,18 +150,36 @@ test('homepage testimonial profile stays visible when its portrait is unavailabl
 });
 });
 
-test('public navigation is balanced in the desktop header and remains accessible on mobile',async({page})=>{
+test('public navigation is balanced in the desktop header and remains accessible on tablet and mobile',async({page})=>{
 	await page.setViewportSize({width:1440,height:900});
 	await page.goto('/');
+	await waitForStartup(page);
+	await page.evaluate(()=>{
+		window.history.replaceState(null,'','/#platform');
+		window.dispatchEvent(new HashChangeEvent('hashchange'));
+	});
 	const websiteNavigation=page.getByRole('navigation',{name:'Website navigation'});
 	await expect(websiteNavigation).toBeVisible();
 	for(const label of ['Platform','Markets','How it works','Education','Support','Sign in','Create an account']){
 		await expect(websiteNavigation.getByRole('link',{name:label})).toBeVisible();
 	}
+	await expect(websiteNavigation.getByRole('link',{name:'Platform'})).toHaveAttribute('aria-current','location');
 	await expect(page.getByRole('button',{name:'Open navigation'})).toBeHidden();
 	await expectNoHorizontalOverflow(page);
 
+	await page.setViewportSize({width:1024,height:768});
+	await expect(websiteNavigation).toBeHidden();
+	const menuButton=page.getByRole('button',{name:'Open navigation'});
+	await expect(menuButton).toBeVisible();
+	await menuButton.click();
+	const primaryNavigation=page.getByRole('navigation',{name:'Primary navigation'});
+	await expect(primaryNavigation).toBeVisible();
+	await page.keyboard.press('Escape');
+	await expect(primaryNavigation).toBeHidden();
+
 	await page.setViewportSize({width:390,height:844});
+	await page.goto('/');
+	await waitForStartup(page);
 	await expect(websiteNavigation).toBeHidden();
 	await expect(page.getByRole('button',{name:'Open navigation'})).toBeVisible();
 	await expectNoHorizontalOverflow(page);

@@ -285,11 +285,11 @@ export default function Nav(){
  return <header className={`site-nav ${status==='authenticated'?'site-nav-authenticated':''} ${status==='authenticated'&&data?.user?.role==='ADMIN'?'site-nav-admin':''}`}><div className="nav-inner">
    <Link href="/" className="brand" onClick={close}><Image className="brand-logo-image" src="/aurevia-logo.png" alt="" width={38} height={38}/><span className="brand-copy"><strong>Aurevia</strong><small>EXCHANGE</small></span></Link>
    {status==='unauthenticated'&&<nav className="public-primary-nav" aria-label="Website navigation">
-    <Link href="/#platform">Platform</Link>
-    <Link href="/markets">Markets</Link>
-    <Link href="/#how-it-works">How it works</Link>
-    <Link href="/#education">Education</Link>
-    <Link href="/support">{translate('support')}</Link>
+    <Link href="/#platform" aria-current={homeRoute&&currentHash==='#platform'?'location':undefined}>Platform</Link>
+    <Link href="/markets" aria-current={pathname==='/markets'?'page':undefined}>Markets</Link>
+    <Link href="/#how-it-works" aria-current={homeRoute&&currentHash==='#how-it-works'?'location':undefined}>How it works</Link>
+    <Link href="/#education" aria-current={homeRoute&&currentHash==='#education'?'location':undefined}>Education</Link>
+    <Link href="/support" aria-current={pathname.startsWith('/support')?'page':undefined}>{translate('support')}</Link>
     <Link href="/login" className="public-nav-sign-in">{translate('signIn')}</Link>
     <Link href="/register" className="public-nav-cta">{translate('createAccount')}</Link>
    </nav>}
