@@ -6,6 +6,7 @@ import {LoaderCircle} from 'lucide-react';
 import AureviaLoading from '@/components/AureviaLoading';
 
 type Orientation='landscape'|'portrait';
+const introMaxDurationMs=15_000;
 
 const introVideos={
 	landscape:'/Videos/aurevia-intro-desktop.mp4',
@@ -50,13 +51,21 @@ export default function AureviaStartup({isVisible,isExiting,onSkip,onReplay}:{is
 		setLoading(true);
 	},[isVisible,orientation]);
 
+	useEffect(()=>{
+		if(!isVisible)return;
+		const timeout=window.setTimeout(()=>{
+			videoRef.current?.pause();
+			onSkip();
+		},introMaxDurationMs);
+		return()=>window.clearTimeout(timeout);
+	},[isVisible,onSkip]);
+
 	const preferredSource=orientation?introVideos[orientation]:null;
 	const fallbackSource=orientation?introVideos[orientation==='portrait'?'landscape':'portrait']:null;
 	const source=sourceIndex===0?preferredSource:fallbackSource;
 
 	const playVideo=useCallback(async(video:HTMLVideoElement|null=videoRef.current)=>{
 		if(!isVisible||!video||video.readyState<HTMLMediaElement.HAVE_CURRENT_DATA||!video.paused||playRequest.current)return;
-		video.muted=true;
 		const request=video.play();
 		playRequest.current=request;
 		try{

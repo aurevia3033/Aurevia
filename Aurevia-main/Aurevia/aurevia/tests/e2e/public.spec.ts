@@ -204,12 +204,14 @@ test('homepage renders for signed-out and signed-in visitors on desktop and mobi
 	test.setTimeout(300_000);
 	for(const authenticated of [false,true]){
 		for(const viewport of [{width:1440,height:900},{width:390,height:844}]){
-			const context=await browser.newContext({viewport});
+			const context=await browser.newContext({viewport,reducedMotion:'no-preference'});
 			try{
 				const page=await context.newPage();
 				if(authenticated)await loginAs(page,fixture('USER_EMAIL'),fixture('USER_PASSWORD'));
 				const response=await page.goto('/');
 				expect(response?.status()).toBe(200);
+				const serverHtml=await response?.text();
+				expect(serverHtml).not.toMatch(/class="aurevia-route-template"[^>]*opacity:0/);
 				await expect(page.locator('.home-hero h1').first()).toBeVisible();
 				await expectNoHorizontalOverflow(page);
 			}finally{
@@ -226,6 +228,21 @@ test('homepage remains visible if the optional intro state gets stuck',async({pa
 	await page.evaluate(()=>{document.documentElement.dataset.aureviaIntroPending='true'});
 	await expect(page.locator('.home-hero h1').first()).toBeVisible();
 	await expect(page.locator('.home-root')).toBeVisible();
+});
+
+test('a stalled replay intro automatically reveals the homepage',async({page})=>{
+	await page.clock.install();
+	await page.goto('/');
+	await expect(page.locator('.home-hero h1').first()).toBeVisible();
+	await page.locator('.exchange-intro-replay').click();
+	const intro=page.getByRole('dialog',{name:'Aurevia Exchange introduction'});
+	await expect(intro).toBeVisible();
+	const video=page.locator('.exchange-intro-video');
+	await expect(video).toBeVisible();
+	await video.evaluate(element=>(element as HTMLVideoElement).pause());
+	await page.clock.fastForward(15_500);
+	await expect(intro).toHaveCount(0);
+	await expect(page.locator('.home-hero h1').first()).toBeVisible();
 });
 
 test.describe('service worker offline support',()=>{
