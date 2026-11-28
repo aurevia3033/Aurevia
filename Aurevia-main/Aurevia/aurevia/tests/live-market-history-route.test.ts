@@ -35,17 +35,17 @@ describe('market history route',()=>{
 		);
 	});
 
-	it('returns a no-cache DEMO outage state without fabricating candles',async()=>{
+	it('returns a no-cache unavailable state without fabricating candles',async()=>{
 		mocks.getHistory.mockRejectedValue(new MarketDataError('Historical market data is not configured or available.',503));
 		const response=await GET(request(),{params:Promise.resolve({symbol:'AAPL'})});
-		expect(response.status).toBe(200);
+		expect(response.status).toBe(503);
 		expect(response.headers.get('Cache-Control')).toBe('private, no-store');
 		expect(await response.json()).toMatchObject({
 			symbol:'AAPL',
 			candles:[],
 			quote:null,
-			source:'Aurevia DEMO market feed',
-			dataMode:'SIMULATED',
+			source:'Unavailable',
+			error:'Historical market data is temporarily unavailable. Please try again shortly.',
 			code:'MARKET_HISTORY_UNAVAILABLE',
 		});
 	});
